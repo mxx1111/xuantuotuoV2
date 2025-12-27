@@ -19,6 +19,42 @@
         .chinese-font {
             font-family: 'Noto Serif SC', serif;
         }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .mask-top-fade {
+            mask-image: linear-gradient(to bottom, transparent, black 40px);
+        }
+
+        /* 动画定义 */
+        @keyframes shuffle-1 {
+            0%, 100% { transform: translate(0, 0) rotate(-12deg); }
+            50% { transform: translate(-80px, 20px) rotate(-30deg); }
+        }
+        @keyframes shuffle-2 {
+            0%, 100% { transform: translate(0, 0) rotate(12deg); }
+            50% { transform: translate(80px, -20px) rotate(30deg); }
+        }
+        @keyframes shuffle-3 {
+            0%, 100% { transform: translate(0, 0) rotate(45deg); }
+            50% { transform: translate(0, -60px) rotate(10deg); }
+        }
+        @keyframes deal-cards {
+            0% { transform: scale(0) rotate(0); opacity: 0; }
+            50% { transform: scale(1.2) rotate(180deg); opacity: 1; }
+            100% { transform: scale(1) rotate(360deg); opacity: 1; }
+        }
+
+        .animate-shuffle-1 { animation: shuffle-1 0.8s ease-in-out infinite; }
+        .animate-shuffle-2 { animation: shuffle-2 0.8s ease-in-out infinite; }
+        .animate-shuffle-3 { animation: shuffle-3 0.8s ease-in-out infinite; }
+        .animate-deal-cards { animation: deal-cards 1.5s ease-out forwards; }
     </style>
 <script type="importmap">
 {
