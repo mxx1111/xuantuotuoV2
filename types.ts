@@ -19,6 +19,7 @@ export enum PlayerId {
 }
 
 export enum GamePhase {
+  LOBBY = 'lobby',
   WAITING = 'waiting',
   DEALING = 'dealing',
   PLAYING = 'playing',
@@ -43,7 +44,7 @@ export interface GameState {
   starter: PlayerId;
   starCoins: Record<PlayerId, number>;
   kouLeInitiator: PlayerId | null;
-  challengers: PlayerId[]; // 那些选择“不扣”的人
+  challengers: PlayerId[]; 
   kouLeResponses: Record<PlayerId, 'agree' | 'challenge' | null>;
   logs: string[];
   aiNames: Record<string, string>;
@@ -56,4 +57,18 @@ export enum RewardLevel {
   GANG_GOU = '刚够',
   WU_LE = '五了',
   CI_LE = '此了'
+}
+
+// 联机消息
+export type NetworkMessageType = 
+  | 'SYNC_STATE' 
+  | 'ACTION_PLAY' 
+  | 'ACTION_KOU_LE_INIT' 
+  | 'ACTION_KOU_LE_RES' 
+  | 'START_GAME';
+
+export interface NetworkMessage {
+  type: NetworkMessageType;
+  payload: any;
+  senderId: string;
 }
