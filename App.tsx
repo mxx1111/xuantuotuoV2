@@ -76,7 +76,7 @@ const INITIAL_GAME_STATE = (starCoins?: Record<PlayerId, number>): GameState => 
   kouLeInitiator: null,
   challengers: { [PlayerId.PLAYER]: 0, [PlayerId.AI_LEFT]: 0, [PlayerId.AI_RIGHT]: 0 },
   kouLeResponses: { [PlayerId.PLAYER]: null, [PlayerId.AI_LEFT]: null, [PlayerId.AI_RIGHT]: null },
-  logs: ['系统: 宣坨坨联机大厅已就绪。'],
+  logs: ['系统: 宣坨坨已就绪。'],
   aiNames: { [PlayerId.AI_LEFT]: 'AI 左', [PlayerId.AI_RIGHT]: 'AI 右' },
   roundHistory: [],
   nextStarter: null,
@@ -106,7 +106,19 @@ const App: React.FC = () => {
   const connectionsRef = useRef<Record<string, any>>({});
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
-  const logContainerRef = useRef<HTMLDivElement>(null);
+
+  // 网络广播函数定义
+  const broadcast = useCallback((type: string, payload: any) => {
+    Object.values(connectionsRef.current).forEach((conn: any) => {
+      if (conn.open) conn.send({ type, payload, senderId: peerRef.current?.id });
+    });
+  }, []);
+
+  const sendToHost = useCallback((type: string, payload: any) => {
+    if (isHost) return;
+    const hostConn = Object.values(connectionsRef.current)[0];
+    if (hostConn && hostConn.open) hostConn.send({ type, payload, senderId: peerRef.current?.id });
+  }, [isHost]);
 
   const playerHandSorted = useMemo(() => {
     return [...gameState.hands[PlayerId.PLAYER]].sort((a, b) => a.strength - b.strength);
@@ -120,6 +132,41 @@ const App: React.FC = () => {
     const order = [PlayerId.PLAYER, PlayerId.AI_RIGHT, PlayerId.AI_LEFT];
     return order.filter(id => id !== initiator);
   }, []);
+
+  const handleNetworkMessage = useCallback((msg: NetworkMessage) => {
+    switch (msg.type) {
+      case 'SYNC_STATE': setGameState(msg.payload); break;
+      case 'ACTION_PLAY': if (isHost) processPlayCards(msg.payload.playerId, msg.payload.cards, msg.payload.isDiscard); break;
+      case 'ACTION_KOU_LE_INIT': if (isHost) processInitiateKouLe(msg.payload.playerId); break;
+      case 'ACTION_KOU_LE_RES': if (isHost) processKouLeResponse(msg.payload.playerId, msg.payload.response); break;
+      case 'ACTION_BET': if (isHost) processBet(msg.payload.playerId, msg.payload.multiplier, msg.payload.grab); break;
+    }
+  }, [isHost]); // 注意：由于递归依赖，内部函数可能需要调整，这里先保持结构
+
+  // 初始化 PeerJS
+  useEffect(() => {
+    if (typeof Peer === 'undefined') return;
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    if (roomParam) setTargetId(roomParam);
+
+    const peer = new Peer();
+    peerRef.current = peer;
+
+    peer.on('open', (id: string) => {
+      setMyId(id);
+      addLog(`🌐 你的房号已就绪: ${id}`);
+    });
+
+    peer.on('connection', (conn: any) => {
+      connectionsRef.current[conn.peer] = conn;
+      conn.on('data', (data: NetworkMessage) => handleNetworkMessage(data));
+      setConnectedPeers(prev => [...prev, conn.peer]);
+    });
+
+    return () => peer.destroy();
+  }, [handleNetworkMessage]);
 
   const settlementData = useMemo(() => {
     const players = [PlayerId.PLAYER, PlayerId.AI_LEFT, PlayerId.AI_RIGHT];
@@ -163,7 +210,7 @@ const App: React.FC = () => {
       }
     }
     return results;
-  }, [gameState.collected, gameState.kouLeInitiator, gameState.challengers, gameState.aiNames, gameState.multipliers, gameState.grabMultiplier]);
+  }, [gameState.collected, gameState.kouLeInitiator, gameState.challengers, gameState.multipliers, gameState.grabMultiplier]);
 
   useEffect(() => {
     if (gameState.phase === GamePhase.SETTLEMENT) {
@@ -175,121 +222,6 @@ const App: React.FC = () => {
       }
     }
   }, [gameState.phase, settlementData]);
-
-  useEffect(() => {
-    if (logContainerRef.current) logContainerRef.current.scrollTop = 0;
-  }, [gameState.logs]);
-
-  const broadcast = useCallback((type: string, payload: any) => {
-    Object.values(connectionsRef.current).forEach((conn: any) => {
-      if (conn.open) conn.send({ type, payload, senderId: peerRef.current?.id });
-    });
-  }, []);
-
-  const sendToHost = useCallback((type: string, payload: any) => {
-    if (isHost) return;
-    const hostConn = Object.values(connectionsRef.current)[0];
-    if (hostConn && hostConn.open) hostConn.send({ type, payload, senderId: peerRef.current?.id });
-  }, [isHost]);
-
-  const resolveTrick = useCallback((currentTable: Play[], currentHands: Record<PlayerId, Card[]>) => {
-    setGameState(prev => {
-      const sortedPlays = [...currentTable].sort((a, b) => b.strength - a.strength);
-      const winner = sortedPlays[0].playerId;
-      const allTrickCards = currentTable.flatMap(p => p.cards);
-      
-      const newCollected = { ...prev.collected };
-      newCollected[winner] = [...newCollected[winner], ...allTrickCards];
-      
-      const newLogs = [...prev.logs];
-      newLogs.unshift(`✅ ${slots[winner].name} 赢得了本轮，收走 ${allTrickCards.length} 张牌。`);
-      
-      const roundHistory = [...prev.roundHistory, currentTable];
-      
-      let nextPhase = prev.phase;
-      let nextTurn = winner;
-      let nextStarter = winner;
-
-      if (Object.values(currentHands).every(h => h.length === 0)) {
-        nextPhase = GamePhase.KOU_LE_DECISION;
-        const newState = { ...prev, collected: newCollected, logs: newLogs.slice(0, 30), phase: nextPhase, roundHistory, turn: nextTurn, starter: nextStarter, table: [], kouLeInitiator: winner };
-        if (isHost) broadcast('SYNC_STATE', newState);
-        return newState;
-      }
-      
-      const newState = { ...prev, collected: newCollected, logs: newLogs.slice(0, 30), roundHistory, turn: nextTurn, starter: nextStarter, table: [] };
-      if (isHost) broadcast('SYNC_STATE', newState);
-      return newState;
-    });
-    SoundEngine.play('win');
-  }, [isHost, broadcast, slots]);
-
-  const processPlayCards = useCallback((pid: PlayerId, cards: Card[], isDiscard: boolean) => {
-    setGameState(prev => {
-      if (prev.turn !== pid || prev.phase !== GamePhase.PLAYING) return prev;
-
-      const pName = pid === PlayerId.PLAYER ? '您' : slots[pid].name;
-      const playRes = calculatePlayStrength(cards);
-      const strength = isDiscard ? -1 : playRes.strength;
-      const type = isDiscard ? 'discard' : playRes.type;
-
-      const newPlay: Play = { playerId: pid, cards, type, strength };
-      const newHand = prev.hands[pid].filter(c => !cards.some(sc => sc.id === c.id));
-      const newHands = { ...prev.hands, [pid]: newHand };
-      const newTable = [...prev.table, newPlay];
-
-      const order = [PlayerId.PLAYER, PlayerId.AI_RIGHT, PlayerId.AI_LEFT];
-      const curIdx = order.indexOf(pid);
-      const nextTurn = order[(curIdx + 1) % 3];
-
-      let logs = [...prev.logs];
-      logs.unshift(`${pName} ${isDiscard ? '扣了' : '出了'} ${cards.length} 张牌。`);
-
-      if (newTable.length === 3) {
-        setTimeout(() => resolveTrick(newTable, newHands), 1200);
-      }
-
-      const nextS = { ...prev, hands: newHands, table: newTable, turn: nextTurn, logs: logs.slice(0, 30) };
-      if (isHost) broadcast('SYNC_STATE', nextS);
-      return nextS;
-    });
-    SoundEngine.play('play');
-    setSelectedCards([]);
-  }, [isHost, broadcast, slots, resolveTrick]);
-
-  const processInitiateKouLe = useCallback((pid: PlayerId) => {
-    setGameState(prev => {
-      const newState = { ...prev, phase: GamePhase.KOU_LE_DECISION, kouLeInitiator: pid, kouLeResponses: { [PlayerId.PLAYER]: null, [PlayerId.AI_LEFT]: null, [PlayerId.AI_RIGHT]: null } };
-      if (isHost) broadcast('SYNC_STATE', newState);
-      return newState;
-    });
-  }, [isHost, broadcast]);
-
-  const processKouLeResponse = useCallback((pid: PlayerId, response: 'agree' | 'challenge') => {
-    setGameState(prev => {
-      const newResponses = { ...prev.kouLeResponses, [pid]: response };
-      const newChallengers = { ...prev.challengers };
-      if (response === 'challenge') {
-        newChallengers[pid] = (newChallengers[pid] || 0) + 1;
-      }
-
-      const pName = pid === PlayerId.PLAYER ? '您' : slots[pid].name;
-      const logs = [`${pName} 选择了 ${response === 'agree' ? '同意(扣了)' : '宣(挑战)'}`, ...prev.logs];
-
-      const respondents = getNextRespondents(prev.kouLeInitiator!);
-      const allResponded = respondents.every(id => newResponses[id] !== null);
-
-      let nextPhase = prev.phase;
-      if (allResponded) {
-        nextPhase = GamePhase.SETTLEMENT;
-        logs.unshift('🏁 对局结算开始！');
-      }
-
-      const nextS = { ...prev, kouLeResponses: newResponses, challengers: newChallengers, logs: logs.slice(0, 30), phase: nextPhase };
-      if (isHost) broadcast('SYNC_STATE', nextS);
-      return nextS;
-    });
-  }, [isHost, broadcast, slots, getNextRespondents]);
 
   const initGame = useCallback((preservedStarter?: PlayerId) => {
     if (!isHost) return;
@@ -332,6 +264,121 @@ const App: React.FC = () => {
       SoundEngine.play('deal');
     }, 2000);
   }, [isHost, broadcast, addLog, slots]);
+
+  const resolveTrick = useCallback((currentTable: Play[], currentHands: Record<PlayerId, Card[]>) => {
+    setGameState(prev => {
+      const sortedPlays = [...currentTable].sort((a, b) => b.strength - a.strength);
+      const winner = sortedPlays[0].playerId;
+      const allTrickCards = currentTable.flatMap(p => p.cards);
+      
+      const newCollected = { ...prev.collected };
+      newCollected[winner] = [...newCollected[winner], ...allTrickCards];
+      
+      const newLogs = [...prev.logs];
+      newLogs.unshift(`✅ ${slots[winner].name} 赢得了本轮，收走 ${allTrickCards.length} 张牌。`);
+      
+      const roundHistory = [...prev.roundHistory, currentTable];
+      
+      let nextPhase = prev.phase;
+      let nextTurn = winner;
+      let nextStarter = winner;
+
+      if (Object.values(currentHands).every(h => h.length === 0)) {
+        nextPhase = GamePhase.SETTLEMENT;
+        const newState = { ...prev, collected: newCollected, logs: newLogs.slice(0, 30), phase: nextPhase, roundHistory, turn: nextTurn, starter: nextStarter, table: [] };
+        if (isHost) broadcast('SYNC_STATE', newState);
+        return newState;
+      }
+      
+      const newState = { ...prev, collected: newCollected, logs: newLogs.slice(0, 30), roundHistory, turn: nextTurn, starter: nextStarter, table: [] };
+      if (isHost) broadcast('SYNC_STATE', newState);
+      return newState;
+    });
+    SoundEngine.play('win');
+  }, [isHost, broadcast, slots]);
+
+  const processPlayCards = useCallback((pid: PlayerId, cards: Card[], isDiscard: boolean) => {
+    setGameState(prev => {
+      if (prev.turn !== pid || prev.phase !== GamePhase.PLAYING) return prev;
+
+      const pName = pid === PlayerId.PLAYER ? '您' : slots[pid].name;
+      const playRes = calculatePlayStrength(cards);
+      const strength = isDiscard ? -1 : playRes.strength;
+      const type = isDiscard ? 'discard' : playRes.type;
+
+      const newPlay: Play = { playerId: pid, cards, type, strength };
+      const newHand = prev.hands[pid].filter(c => !cards.some(sc => sc.id === c.id));
+      const newHands = { ...prev.hands, [pid]: newHand };
+      const newTable = [...prev.table, newPlay];
+
+      const isTrickOver = newTable.length === 3;
+      let nextTurn = prev.turn;
+      if (!isTrickOver) {
+        const order = [PlayerId.PLAYER, PlayerId.AI_RIGHT, PlayerId.AI_LEFT];
+        const curIdx = order.indexOf(pid);
+        nextTurn = order[(curIdx + 1) % 3];
+      }
+
+      let logs = [...prev.logs];
+      logs.unshift(`${pName} ${isDiscard ? '扣了' : '出了'} ${cards.length} 张牌。`);
+
+      if (isTrickOver) {
+        setTimeout(() => resolveTrick(newTable, newHands), 1200);
+      }
+
+      const nextS = { ...prev, hands: newHands, table: newTable, turn: nextTurn, logs: logs.slice(0, 30) };
+      if (isHost) broadcast('SYNC_STATE', nextS);
+      return nextS;
+    });
+    SoundEngine.play('play');
+    setSelectedCards([]);
+  }, [isHost, broadcast, slots, resolveTrick]);
+
+  const processInitiateKouLe = useCallback((pid: PlayerId) => {
+    setGameState(prev => {
+      const newState = { 
+        ...prev, 
+        phase: GamePhase.KOU_LE_DECISION, 
+        kouLeInitiator: pid, 
+        kouLeResponses: { [PlayerId.PLAYER]: null, [PlayerId.AI_LEFT]: null, [PlayerId.AI_RIGHT]: null },
+        logs: [`📣 ${pid === PlayerId.PLAYER ? '您' : slots[pid].name} 发起了“扣了”博弈！`, ...prev.logs].slice(0, 30)
+      };
+      if (isHost) broadcast('SYNC_STATE', newState);
+      return newState;
+    });
+  }, [isHost, broadcast, slots]);
+
+  const processKouLeResponse = useCallback((pid: PlayerId, response: 'agree' | 'challenge') => {
+    setGameState(prev => {
+      const newResponses = { ...prev.kouLeResponses, [pid]: response };
+      const newChallengers = { ...prev.challengers };
+      if (response === 'challenge') {
+        newChallengers[pid] = (newChallengers[pid] || 0) + 1;
+      }
+
+      const pName = pid === PlayerId.PLAYER ? '您' : slots[pid].name;
+      const logs = [`${pName} 选择了 ${response === 'agree' ? '同意(扣了)' : '宣(挑战)'}`, ...prev.logs];
+
+      const respondents = getNextRespondents(prev.kouLeInitiator!);
+      const allResponded = respondents.every(id => newResponses[id] !== null);
+
+      if (allResponded) {
+        const anyChallenge = Object.values(newResponses).some(r => r === 'challenge');
+        if (!anyChallenge) {
+          logs.unshift('🔄 全员同意“扣了”，本局作废，重新发牌。');
+          setTimeout(() => initGame(prev.starter), 1500);
+          return { ...prev, kouLeResponses: newResponses, logs: logs.slice(0, 30), phase: GamePhase.DEALING };
+        } else {
+          logs.unshift('⚔️ 有人选择“宣”，博弈达成，游戏继续！');
+          return { ...prev, kouLeResponses: newResponses, challengers: newChallengers, logs: logs.slice(0, 30), phase: GamePhase.PLAYING };
+        }
+      }
+
+      const nextS = { ...prev, kouLeResponses: newResponses, challengers: newChallengers, logs: logs.slice(0, 30) };
+      if (isHost) broadcast('SYNC_STATE', nextS);
+      return nextS;
+    });
+  }, [isHost, broadcast, slots, getNextRespondents, initGame]);
 
   const processBet = useCallback((pid: PlayerId, multiplier: number, grab: boolean) => {
     setGameState(prev => {
@@ -379,18 +426,9 @@ const App: React.FC = () => {
     SoundEngine.play('bet');
   }, [isHost, broadcast, slots]);
 
-  const handleNetworkMessage = useCallback((msg: NetworkMessage) => {
-    switch (msg.type) {
-      case 'SYNC_STATE': setGameState(msg.payload); break;
-      case 'ACTION_PLAY': if (isHost) processPlayCards(msg.payload.playerId, msg.payload.cards, msg.payload.isDiscard); break;
-      case 'ACTION_KOU_LE_INIT': if (isHost) processInitiateKouLe(msg.payload.playerId); break;
-      case 'ACTION_KOU_LE_RES': if (isHost) processKouLeResponse(msg.payload.playerId, msg.payload.response); break;
-      case 'ACTION_BET': if (isHost) processBet(msg.payload.playerId, msg.payload.multiplier, msg.payload.grab); break;
-    }
-  }, [isHost, processBet, processPlayCards, processInitiateKouLe, processKouLeResponse]);
-
+  // AI 逻辑集成
   useEffect(() => {
-    if (isHost && gameState.phase === GamePhase.BETTING && gameState.betTurn && slots[gameState.betTurn].type === 'ai') {
+    if (isHost && gameState.phase === GamePhase.BETTING && gameState.betTurn && slots[gameState.betTurn!].type === 'ai') {
       const timer = setTimeout(() => {
         const decision = aiDecideBet(gameState.hands[gameState.betTurn!], gameState.grabMultiplier, gameState.grabber);
         processBet(gameState.betTurn!, decision.multiplier, decision.grab);
@@ -400,11 +438,11 @@ const App: React.FC = () => {
   }, [isHost, gameState.phase, gameState.betTurn, gameState.hands, gameState.grabMultiplier, gameState.grabber, slots, processBet]);
 
   useEffect(() => {
-    if (isHost && gameState.phase === GamePhase.PLAYING && slots[gameState.turn].type === 'ai') {
+    if (isHost && gameState.phase === GamePhase.PLAYING && slots[gameState.turn].type === 'ai' && gameState.table.length < 3) {
       const timer = setTimeout(() => {
         const hand = gameState.hands[gameState.turn];
         const targetPlay = gameState.table.length > 0 ? gameState.table[0] : null;
-        const currentMaxStr = targetPlay ? targetPlay.strength : -1;
+        const currentMaxStr = gameState.table.reduce((max, p) => Math.max(max, p.strength), -1);
         const collectedCount = gameState.collected[gameState.turn].length;
         
         const cardsToPlay = aiDecidePlay(hand, targetPlay, currentMaxStr, collectedCount);
@@ -415,30 +453,17 @@ const App: React.FC = () => {
     }
   }, [isHost, gameState.phase, gameState.turn, gameState.hands, gameState.table, gameState.collected, slots, processPlayCards]);
 
-  useEffect(() => {
-    if (isHost && gameState.phase === GamePhase.KOU_LE_DECISION) {
-      const respondents = getNextRespondents(gameState.kouLeInitiator!);
-      const currentDecider = respondents.find(id => gameState.kouLeResponses[id] === null);
-      if (currentDecider && slots[currentDecider].type === 'ai') {
-        const timer = setTimeout(() => {
-          const response = aiEvaluateKouLe(gameState.hands[currentDecider], gameState.collected[currentDecider].length);
-          processKouLeResponse(currentDecider, response);
-        }, 2000 + Math.random() * 1000);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [isHost, gameState.phase, gameState.kouLeInitiator, gameState.kouLeResponses, gameState.hands, gameState.collected, slots, getNextRespondents, processKouLeResponse]);
-
   const quitToLobby = useCallback(() => {
     setGameState(INITIAL_GAME_STATE(gameState.starCoins));
     setIsHost(false);
     setConnectedPeers([]);
-    setMyId('');
+    setMyId(peerRef.current?.id || '');
   }, [gameState.starCoins]);
 
   const handleShareRoom = useCallback(() => {
-    navigator.clipboard.writeText(myId);
-    addLog("📋 房间号已复制到剪贴板，快发给好友吧！");
+    const shareUrl = `${window.location.origin}${window.location.pathname}?room=${myId}`;
+    navigator.clipboard.writeText(shareUrl);
+    addLog("📋 邀请链接已复制！发给好友即可加入。");
   }, [myId, addLog]);
 
   const handleAction = useCallback((isDiscard: boolean) => {
@@ -452,7 +477,7 @@ const App: React.FC = () => {
 
   const handleHint = useCallback(() => {
     const targetPlay = gameState.table.length > 0 ? gameState.table[0] : null;
-    const currentMaxStr = targetPlay ? targetPlay.strength : -1;
+    const currentMaxStr = gameState.table.reduce((max, p) => Math.max(max, p.strength), -1);
     const valid = getValidPlays(gameState.hands[PlayerId.PLAYER], targetPlay, currentMaxStr);
     if (valid.length > 0) {
       setSelectedCards(valid[0]);
@@ -462,74 +487,132 @@ const App: React.FC = () => {
   }, [gameState.hands, gameState.table, addLog]);
 
   const renderLobby = () => (
-    <div className="absolute inset-0 z-[500] bg-slate-950 flex flex-col items-center justify-center p-6 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
-      <div className="text-center mb-12 animate-in fade-in slide-in-from-top-10 duration-1000">
-        <h1 className="text-7xl font-black chinese-font text-emerald-500 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] mb-2">宣 坨 坨</h1>
-        <p className="text-slate-500 uppercase tracking-[0.3em] text-xs font-bold">Traditional Sichuan Strategy Card Game</p>
+    <div className="absolute inset-0 z-[500] bg-slate-950 flex flex-col items-center justify-start sm:justify-center p-6 overflow-y-auto custom-scrollbar bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
+      <div className="text-center mt-8 mb-6 sm:mb-12 animate-in fade-in slide-in-from-top-10 duration-1000">
+        <h1 className="text-5xl sm:text-7xl font-black chinese-font text-emerald-500 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] mb-2">宣 坨 坨</h1>
+        <p className="text-slate-500 uppercase tracking-[0.3em] text-[10px] sm:text-xs font-bold">Traditional Shanxi Strategy Game</p>
       </div>
-      <div className="flex flex-col gap-5 w-full max-sm animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
-        <button onClick={() => { setIsHost(true); setGameState(prev => ({...prev, phase: GamePhase.WAITING})); }} className="group relative overflow-hidden py-6 rounded-3xl bg-emerald-600 font-black text-2xl chinese-font shadow-[0_10px_40px_-10px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95 transition-all">
+      
+      <div className="flex flex-col gap-4 sm:gap-5 w-full max-w-sm animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
+        <button onClick={() => { setIsHost(true); setGameState(prev => ({...prev, phase: GamePhase.WAITING})); }} className="group relative overflow-hidden py-4 sm:py-6 rounded-3xl bg-emerald-600 font-black text-xl sm:text-2xl chinese-font shadow-[0_10px_40px_-10px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95 transition-all">
           <span className="relative z-10">开 设 牌 局</span>
           <div className="absolute inset-0 bg-gradient-to-tr from-emerald-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
         </button>
-        <div className="flex gap-2">
-          <input value={targetId} onChange={e => setTargetId(e.target.value)} placeholder="输入好友房间号..." className="flex-1 bg-slate-900 border border-white/10 rounded-2xl px-6 font-bold text-emerald-400 placeholder:text-slate-700 focus:border-emerald-500/50 focus:outline-none transition-all" />
-          <button onClick={() => addLog("系统: 联机功能演示中...")} className="bg-slate-800 hover:bg-slate-700 px-6 py-4 rounded-2xl font-black chinese-font text-lg transition-all active:scale-90">加 入</button>
+        
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <input value={targetId} onChange={e => setTargetId(e.target.value)} placeholder="输入房号..." className="flex-1 bg-slate-900 border border-white/10 rounded-2xl px-4 sm:px-6 py-3 font-bold text-emerald-400 placeholder:text-slate-700 focus:border-emerald-500/50 focus:outline-none transition-all" />
+            <button onClick={() => addLog("系统: 接入中...")} className="bg-slate-800 hover:bg-slate-700 px-4 sm:px-6 py-3 rounded-2xl font-black chinese-font text-base sm:text-lg transition-all active:scale-90">加 入</button>
+          </div>
+          {myId && (
+            <div className="mt-2 p-3 sm:p-4 bg-slate-900/50 border border-emerald-500/20 rounded-2xl flex flex-row items-center justify-between group">
+              <div className="flex flex-col overflow-hidden mr-2">
+                <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">我的房号</span>
+                <span className="text-emerald-400 font-mono font-bold text-xs truncate">{myId}</span>
+              </div>
+              <button onClick={handleShareRoom} className="px-3 py-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-xl transition-all flex items-center gap-1 shrink-0">
+                <span className="text-sm">📋</span>
+                <span className="text-xs font-black">分享</span>
+              </button>
+            </div>
+          )}
         </div>
-        <button onClick={() => setShowRules(true)} className="py-4 text-slate-500 font-black hover:text-emerald-400 transition-all uppercase tracking-widest text-xs">查看游戏规则</button>
+        
+        <button onClick={() => setShowRules(true)} className="py-2 sm:py-4 text-slate-500 font-black hover:text-emerald-400 transition-all uppercase tracking-widest text-[10px]">查看游戏规则</button>
+      </div>
+    </div>
+  );
+
+  const renderHistoryModal = () => (
+    <div className="absolute inset-0 z-[1000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-300">
+      <div className="bg-slate-900 border border-emerald-500/30 p-6 sm:p-8 rounded-[2rem] max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <h2 className="text-2xl sm:text-3xl font-black chinese-font text-emerald-500 mb-4 sm:mb-6 flex justify-between items-center shrink-0">
+          <span>对局实录</span>
+          <button onClick={() => setShowHistory(false)} className="text-slate-500 hover:text-white">✕</button>
+        </h2>
+        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
+          {gameState.roundHistory.length === 0 ? (
+            <div className="text-center py-20 text-slate-600 font-black chinese-font italic">尚无出牌记录</div>
+          ) : (
+            gameState.roundHistory.map((trick, tidx) => {
+              const winner = [...trick].sort((a,b) => b.strength - a.strength)[0].playerId;
+              return (
+                <div key={tidx} className="p-3 sm:p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col gap-2 sm:gap-3">
+                  <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                    <span className="text-[10px] sm:text-xs font-black text-slate-500 uppercase">第 {tidx + 1} 轮</span>
+                    <span className="text-[10px] sm:text-xs font-black text-emerald-500 chinese-font">赢家: {slots[winner].name}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                    {trick.map((p, pidx) => (
+                      <div key={pidx} className="flex flex-col items-center gap-1 sm:gap-2">
+                        <span className="text-[8px] sm:text-[10px] font-black text-slate-400 truncate w-full text-center">{slots[p.playerId].name}</span>
+                        <div className="flex -space-x-3 sm:-space-x-4">
+                          {p.cards.map(c => (
+                            <PlayingCard key={c.id} card={c} size="mini" isBack={p.type === 'discard'} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <button onClick={() => setShowHistory(false)} className="mt-4 sm:mt-6 w-full py-3 sm:py-4 bg-slate-800 rounded-2xl font-black text-lg sm:text-xl chinese-font active:scale-95 transition-all">关 闭</button>
       </div>
     </div>
   );
 
   const renderRulesModal = () => (
-    <div className="absolute inset-0 z-[1000] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
-      <div className="bg-slate-900 border border-emerald-500/30 p-8 rounded-[2rem] max-w-2xl w-full max-h-[80vh] overflow-y-auto custom-scrollbar shadow-2xl">
-        <h2 className="text-3xl font-black chinese-font text-emerald-500 mb-6 border-b border-white/5 pb-4 flex justify-between items-center">
+    <div className="absolute inset-0 z-[1000] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-300">
+      <div className="bg-slate-900 border border-emerald-500/30 p-6 sm:p-8 rounded-[2rem] max-w-2xl w-full max-h-[85vh] overflow-y-auto custom-scrollbar shadow-2xl">
+        <h2 className="text-2xl sm:text-3xl font-black chinese-font text-emerald-500 mb-4 sm:mb-6 border-b border-white/5 pb-4 flex justify-between items-center">
           <span>宣坨坨 玩法规则</span>
           <button onClick={() => setShowRules(false)} className="text-slate-500 hover:text-white">✕</button>
         </h2>
-        <div className="space-y-6 text-slate-300 leading-relaxed font-medium">
+        <div className="space-y-4 sm:space-y-6 text-slate-300 leading-relaxed font-medium text-sm sm:text-base">
           <section>
-            <h3 className="text-emerald-400 font-black mb-2 flex items-center gap-2">🔹 牌组构成</h3>
+            <h3 className="text-emerald-400 font-black mb-1 flex items-center gap-2">🔹 牌组构成</h3>
             <p>共24张牌：红黑卒(7)、马(8)、相(9)、尔(10)、曲(JQK)、大王(RJ)、小王(SJ)。每人起手8张。</p>
           </section>
           <section>
-            <h3 className="text-emerald-400 font-black mb-2 flex items-center gap-2">🔹 出牌规则</h3>
-            <p>可出单张、对子、三张（特定组合）。下家必须跟同数量的牌，若点数不够则必须“扣牌”（即弃权且此牌计入赢家）。</p>
+            <h3 className="text-emerald-400 font-black mb-1 flex items-center gap-2">🔹 出牌规则</h3>
+            <p>可出单张、对子、三张（特定组合）。下家必须跟同数量的牌，且牌力必须严格大于当前场上最大牌。若没有能压过的牌则必须扣牌。</p>
           </section>
           <section>
-            <h3 className="text-emerald-400 font-black mb-2 flex items-center gap-2">🔹 博弈阶段</h3>
-            <p>发牌后可选择“加倍”或“抢收牌”。抢收牌者成为先手，且全局结算倍率翻倍。</p>
+            <h3 className="text-emerald-400 font-black mb-1 flex items-center gap-2">🔹 博弈阶段</h3>
+            <p>发牌后可选择“加倍”或“抢收牌”。抢收牌者成为先手，且全局结算倍率翻倍。轮到领先出牌时可发起“扣了”博弈。</p>
           </section>
           <section>
-            <h3 className="text-emerald-400 font-black mb-2 flex items-center gap-2">🔹 胜负结算</h3>
+            <h3 className="text-emerald-400 font-black mb-1 flex items-center gap-2">🔹 胜负结算</h3>
             <p>按收回的牌数计分：9张“刚够”(1分)，15张“五了”(2分)，18张“此了”(3分)。不满9张为输。</p>
           </section>
         </div>
-        <button onClick={() => setShowRules(false)} className="mt-8 w-full py-4 bg-emerald-600 rounded-2xl font-black text-xl chinese-font active:scale-95 transition-all">我 懂 了</button>
+        <button onClick={() => setShowRules(false)} className="mt-6 sm:mt-8 w-full py-3 sm:py-4 bg-emerald-600 rounded-2xl font-black text-lg sm:text-xl chinese-font active:scale-95 transition-all">我 懂 了</button>
       </div>
     </div>
   );
 
   const renderTableSlot = (pid: PlayerId) => {
     const play = gameState.table.find(p => p.playerId === pid);
-    if (!play) return <div className="w-20 h-32 md:w-24 md:h-36 rounded-2xl border-2 border-dashed border-white/5 flex items-center justify-center text-slate-800 text-[10px] uppercase font-black tracking-tighter">Wait...</div>;
+    if (!play) return <div className="w-16 h-24 sm:w-24 sm:h-36 rounded-2xl border-2 border-dashed border-white/5 flex items-center justify-center text-slate-800 text-[8px] sm:text-[10px] uppercase font-black tracking-tighter shrink-0">Wait...</div>;
 
     const isPlayer = pid === PlayerId.PLAYER;
     const animationClass = pid === PlayerId.PLAYER ? 'play-animation-bottom' : (pid === PlayerId.AI_LEFT ? 'play-animation-left' : 'play-animation-right');
 
     return (
-      <div className={`flex transition-transform duration-500 ${isPlayer ? 'translate-y-12' : ''} ${animationClass}`}>
+      <div className={`flex transition-transform duration-500 ${isPlayer ? 'translate-y-6 sm:translate-y-12' : ''} ${animationClass} shrink-0`}>
         {play.cards.map((c, i) => (
           <div 
             key={c.id} 
             style={{ 
-              marginLeft: i === 0 ? 0 : '-1.5rem', 
+              marginLeft: i === 0 ? 0 : (window.innerWidth < 640 ? '-1rem' : '-1.5rem'), 
               zIndex: i 
             }} 
             className="drop-shadow-2xl"
           >
-            <PlayingCard card={c} size="small" isBack={play.type === 'discard'} />
+            <PlayingCard card={c} size={window.innerWidth < 640 ? 'small' : 'normal'} isBack={play.type === 'discard'} />
           </div>
         ))}
       </div>
@@ -541,46 +624,46 @@ const App: React.FC = () => {
     const isMyTurn = gameState.betTurn === PlayerId.PLAYER;
     
     return (
-      <div className="absolute inset-0 z-[400] bg-slate-950/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 animate-in zoom-in">
-        <div className="bg-slate-900 border border-emerald-500/40 p-10 rounded-[3rem] shadow-2xl text-center max-w-md w-full relative">
-          <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 bg-emerald-500 text-slate-950 font-black px-6 py-2 rounded-full shadow-xl">
+      <div className="absolute inset-0 z-[400] bg-slate-950/60 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-6 animate-in zoom-in">
+        <div className="bg-slate-900 border border-emerald-500/40 p-6 sm:p-10 rounded-[2rem] sm:rounded-[3rem] shadow-2xl text-center max-w-md w-full relative">
+          <div className="absolute top-[-25px] sm:top-[-40px] left-1/2 -translate-x-1/2 bg-emerald-500 text-slate-950 font-black px-4 sm:px-6 py-1.5 sm:py-2 rounded-full shadow-xl text-xs sm:text-sm whitespace-nowrap">
             {isMyTurn ? "轮到您决策" : `等待 ${slots[gameState.betTurn!].name} 决策...`}
           </div>
           
-          <div className="mb-6">
-            <div className="text-slate-400 text-xs uppercase tracking-widest mb-2">当前倍率</div>
-            <div className="flex justify-center gap-4">
-               <div className="bg-black/40 px-4 py-2 rounded-xl border border-white/5">
-                 <span className="text-[10px] text-slate-500 block">全局抢牌</span>
-                 <span className="text-xl font-black text-emerald-400">x{gameState.grabMultiplier}</span>
+          <div className="mb-4 sm:mb-6 mt-2">
+            <div className="text-slate-400 text-[10px] sm:text-xs uppercase tracking-widest mb-2">当前倍率</div>
+            <div className="flex justify-center gap-3 sm:gap-4">
+               <div className="bg-black/40 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-white/5">
+                 <span className="text-[8px] sm:text-[10px] text-slate-500 block">全局抢牌</span>
+                 <span className="text-lg sm:text-xl font-black text-emerald-400">x{gameState.grabMultiplier}</span>
                </div>
                {gameState.grabber && (
-                 <div className="bg-red-600/20 px-4 py-2 rounded-xl border border-red-500/30">
-                   <span className="text-[10px] text-red-400 block">抢牌者</span>
-                   <span className="text-sm font-black text-white">{slots[gameState.grabber].name}</span>
+                 <div className="bg-red-600/20 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-red-500/30">
+                   <span className="text-[8px] sm:text-[10px] text-red-400 block">抢牌者</span>
+                   <span className="text-xs sm:text-sm font-black text-white">{slots[gameState.grabber].name}</span>
                  </div>
                )}
             </div>
           </div>
 
           {isMyTurn ? (
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-3 gap-3">
-                <button onClick={() => processBet(PlayerId.PLAYER, 1, false)} className="py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl font-black text-sm transition-all border border-white/5">不加倍</button>
-                <button onClick={() => processBet(PlayerId.PLAYER, 2, false)} className="py-4 bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 rounded-2xl font-black text-sm hover:bg-emerald-600/30 transition-all">加倍 x2</button>
-                <button onClick={() => processBet(PlayerId.PLAYER, 4, false)} className="py-4 bg-orange-600/20 text-orange-400 border border-orange-500/20 rounded-2xl font-black text-sm hover:bg-orange-600/30 transition-all">超倍 x4</button>
+            <div className="flex flex-col gap-3 sm:gap-4">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <button onClick={() => processBet(PlayerId.PLAYER, 1, false)} className="py-3 sm:py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl font-black text-xs sm:text-sm transition-all border border-white/5">不加倍</button>
+                <button onClick={() => processBet(PlayerId.PLAYER, 2, false)} className="py-3 sm:py-4 bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 rounded-2xl font-black text-xs sm:text-sm hover:bg-emerald-600/30 transition-all">加倍 x2</button>
+                <button onClick={() => processBet(PlayerId.PLAYER, 4, false)} className="py-3 sm:py-4 bg-orange-600/20 text-orange-400 border border-orange-500/20 rounded-2xl font-black text-xs sm:text-sm hover:bg-orange-600/30 transition-all">超倍 x4</button>
               </div>
               <button 
                 onClick={() => processBet(PlayerId.PLAYER, gameState.multipliers[PlayerId.PLAYER], true)} 
-                className={`py-4 rounded-2xl font-black chinese-font transition-all text-lg bg-red-600 hover:bg-red-500 shadow-xl text-white`}
+                className={`py-3 sm:py-4 rounded-2xl font-black chinese-font transition-all text-base sm:text-lg bg-red-600 hover:bg-red-500 shadow-xl text-white`}
               >
-                {gameState.grabber ? "顶 抢 收 牌 (倍数再翻倍)" : "抢 收 牌 (全局 x2)"}
+                {gameState.grabber ? "顶 抢 收 牌" : "抢 收 牌 (x2)"}
               </button>
             </div>
           ) : (
-            <div className="flex flex-col items-center py-6 gap-3">
-               <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
-               <span className="text-xs font-black text-emerald-400">对手正在深思熟虑...</span>
+            <div className="flex flex-col items-center py-4 sm:py-6 gap-2 sm:gap-3">
+               <div className="w-8 h-8 sm:w-10 sm:h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+               <span className="text-[10px] sm:text-xs font-black text-emerald-400">对手正在决策...</span>
             </div>
           )}
         </div>
@@ -593,138 +676,147 @@ const App: React.FC = () => {
   const selectedStrength = calculatePlayStrength(selectedCards);
   
   const canFollow = useMemo(() => {
-    if (gameState.turn !== PlayerId.PLAYER) return false;
+    if (gameState.turn !== PlayerId.PLAYER || gameState.phase !== GamePhase.PLAYING) return false;
     if (!targetPlay) return selectedStrength.type !== 'discard';
     return selectedStrength.type === targetPlay.type && 
            selectedCards.length === targetPlay.cards.length && 
            selectedStrength.strength > currentMaxStr;
-  }, [gameState.turn, targetPlay, selectedStrength, selectedCards.length, currentMaxStr]);
+  }, [gameState.turn, gameState.phase, targetPlay, selectedStrength, selectedCards.length, currentMaxStr]);
 
   const mustFollowIfPossible = useMemo(() => {
-    if (gameState.turn !== PlayerId.PLAYER || !targetPlay) return false;
+    if (gameState.turn !== PlayerId.PLAYER || !targetPlay || gameState.phase !== GamePhase.PLAYING) return false;
     const validPlays = getValidPlays(gameState.hands[PlayerId.PLAYER], targetPlay, currentMaxStr);
     return validPlays.length > 0;
-  }, [gameState.turn, targetPlay, gameState.hands, currentMaxStr]);
+  }, [gameState.turn, targetPlay, gameState.phase, gameState.hands, currentMaxStr]);
 
   const canDiscard = useMemo(() => {
-    if (gameState.turn !== PlayerId.PLAYER || !targetPlay) return false;
+    if (gameState.turn !== PlayerId.PLAYER || !targetPlay || gameState.phase !== GamePhase.PLAYING) return false;
     return selectedCards.length === targetPlay.cards.length && !mustFollowIfPossible;
-  }, [gameState.turn, targetPlay, selectedCards.length, mustFollowIfPossible]);
+  }, [gameState.turn, targetPlay, selectedCards.length, mustFollowIfPossible, gameState.phase]);
+
+  const canInitiateKouLe = useMemo(() => {
+    return gameState.phase === GamePhase.PLAYING && 
+           gameState.turn === PlayerId.PLAYER && 
+           gameState.table.length === 0 && 
+           gameState.kouLeInitiator === null;
+  }, [gameState.phase, gameState.turn, gameState.table.length, gameState.kouLeInitiator]);
 
   return (
     <div className="h-screen w-full flex flex-col bg-slate-950 text-slate-100 overflow-hidden relative landscape:flex-row">
       {gameState.phase === GamePhase.LOBBY && renderLobby()}
       {showRules && renderRulesModal()}
+      {showHistory && renderHistoryModal()}
+      
       {gameState.phase === GamePhase.WAITING && (
-         <div className="absolute inset-0 z-[400] bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6">
-            <div className="flex flex-col items-center gap-2 mb-10">
-               <h2 className="text-2xl font-black chinese-font text-emerald-500">等待备战中...</h2>
+         <div className="absolute inset-0 z-[400] bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-center p-4 sm:p-6 overflow-y-auto">
+            <div className="flex flex-col items-center gap-2 mb-6 sm:mb-10 shrink-0">
+               <h2 className="text-xl sm:text-2xl font-black chinese-font text-emerald-500">等待备战中...</h2>
                {isHost && (
-                  <button onClick={handleShareRoom} className="px-4 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-black hover:bg-emerald-600/30 transition-all flex items-center gap-2">🔗 分享房间邀请好友</button>
+                  <button onClick={handleShareRoom} className="px-3 sm:px-4 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[9px] sm:text-[10px] font-black hover:bg-emerald-600/30 transition-all flex items-center gap-2">🔗 复制房间链接</button>
                )}
             </div>
-            <div className="flex items-center justify-center gap-8 md:gap-24 mb-16">
+            <div className="flex items-center justify-center gap-6 sm:gap-24 mb-10 sm:mb-16 shrink-0">
               {[PlayerId.AI_LEFT, PlayerId.PLAYER, PlayerId.AI_RIGHT].map(id => (
-                <div key={id} className={`flex flex-col items-center gap-4 ${id === PlayerId.PLAYER ? 'mt-20' : ''}`}>
-                   <div className={`w-20 h-20 md:w-28 md:h-28 rounded-full border-2 flex items-center justify-center text-4xl shadow-2xl transition-all ${id === PlayerId.PLAYER ? 'border-emerald-500 bg-slate-800' : (slots[id].type === 'empty' ? 'border-dashed border-slate-700 bg-slate-900/50 grayscale' : 'border-emerald-500 bg-slate-800')}`}>
+                <div key={id} className={`flex flex-col items-center gap-2 sm:gap-4 ${id === PlayerId.PLAYER ? 'mt-8 sm:mt-20 scale-110' : ''}`}>
+                   <div className={`w-14 h-14 sm:w-28 sm:h-28 rounded-full border-2 flex items-center justify-center text-2xl sm:text-4xl shadow-2xl transition-all ${id === PlayerId.PLAYER ? 'border-emerald-500 bg-slate-800' : (slots[id].type === 'empty' ? 'border-dashed border-slate-700 bg-slate-900/50 grayscale' : 'border-emerald-500 bg-slate-800')}`}>
                       {id === PlayerId.PLAYER ? '👤' : (slots[id].type === 'empty' ? '?' : (slots[id].type === 'ai' ? '🤖' : '侠'))}
                    </div>
                    <div className="text-center">
-                      <div className="text-xs font-black text-slate-300 chinese-font">{slots[id].name}</div>
-                      {isHost && id !== PlayerId.PLAYER && slots[id].type !== 'human' && (
+                      <div className="text-[10px] sm:text-xs font-black text-slate-300 chinese-font truncate max-w-[60px] sm:max-w-none">{slots[id].name}</div>
+                      {isHost && id !== PlayerId.PLAYER && (
                         <button onClick={() => setSlots(prev => { 
                           const n = {...prev}; 
                           if(n[id].type === 'empty') { 
                             const usedNames = Object.values(slots).map(s => s.name);
                             const name = AI_NAME_POOL.filter(n => !usedNames.includes(n))[0] || 'AI'; 
                             n[id] = { type: 'ai', name }; 
-                            setGameState(gs => ({...gs, aiNames: {...gs.aiNames, [id]: name}})); 
                           } else { 
                             n[id] = { type: 'empty', name: '等待加入...' }; 
-                            setGameState(gs => ({...gs, aiNames: {...gs.aiNames, [id]: 'AI'}})); 
                           } 
                           return n; 
-                        })} className="mt-2 text-[10px] text-emerald-500 hover:underline">{slots[id].type === 'empty' ? '+ 添加 AI' : '× 移除 AI'}</button>
+                        })} className="mt-1 text-[8px] sm:text-[10px] text-emerald-500 hover:underline">{slots[id].type === 'empty' ? '+ 添加 AI' : '× 移除 AI'}</button>
                       )}
                    </div>
                 </div>
               ))}
             </div>
             {isHost ? (
-               <div className="flex flex-col gap-4 w-full max-sm">
-                  <button onClick={() => initGame()} disabled={slots[PlayerId.AI_LEFT].type === 'empty' || slots[PlayerId.AI_RIGHT].type === 'empty'} className={`px-20 py-6 rounded-3xl font-black text-2xl transition-all chinese-font shadow-2xl ${slots[PlayerId.AI_LEFT].type !== 'empty' && slots[PlayerId.AI_RIGHT].type !== 'empty' ? 'bg-emerald-600 hover:scale-105 active:scale-95' : 'bg-slate-800 text-slate-600 opacity-50 cursor-not-allowed'}`}>开 始 游 戏</button>
-                  <button onClick={quitToLobby} className="py-3 text-slate-500 text-xs font-black hover:text-slate-300 transition-all uppercase tracking-widest">解散房间并返回</button>
+               <div className="flex flex-col gap-3 sm:gap-4 w-full max-w-[280px] sm:max-w-sm shrink-0">
+                  <button onClick={() => initGame()} disabled={slots[PlayerId.AI_LEFT].type === 'empty' || slots[PlayerId.AI_RIGHT].type === 'empty'} className={`py-4 sm:py-6 rounded-3xl font-black text-lg sm:text-2xl transition-all chinese-font shadow-2xl ${slots[PlayerId.AI_LEFT].type !== 'empty' && slots[PlayerId.AI_RIGHT].type !== 'empty' ? 'bg-emerald-600 hover:scale-105 active:scale-95' : 'bg-slate-800 text-slate-600 opacity-50 cursor-not-allowed'}`}>开 始 游 戏</button>
+                  <button onClick={quitToLobby} className="py-2 text-slate-500 text-[10px] font-black hover:text-slate-300 transition-all uppercase tracking-widest">返回大厅</button>
                </div>
-            ) : (<div className="text-emerald-500 animate-pulse font-black chinese-font text-xl">房主正在配置席位...</div>)}
+            ) : (<div className="text-emerald-500 animate-pulse font-black chinese-font text-base sm:text-xl">房主正在配置席位...</div>)}
          </div>
       )}
       {gameState.phase === GamePhase.DEALING && (
         <div className="absolute inset-0 z-[600] bg-slate-950/80 backdrop-blur-xl flex flex-col items-center justify-center p-6 overflow-hidden">
-          <div className="relative w-64 h-64 mb-12 flex items-center justify-center">
-            <div className="absolute w-24 h-36 bg-white rounded-lg shadow-2xl border border-slate-300 transform -rotate-12 animate-shuffle-1"></div>
-            <div className="absolute w-24 h-36 bg-white rounded-lg shadow-2xl border border-slate-300 transform rotate(12deg) animate-shuffle-2"></div>
-            <div className="absolute w-24 h-36 bg-emerald-500 rounded-lg shadow-2xl border border-emerald-400 flex items-center justify-center text-4xl animate-deal-cards">🎴</div>
+          <div className="relative w-48 h-48 sm:w-64 sm:h-64 mb-8 sm:mb-12 flex items-center justify-center">
+            <div className="absolute w-16 h-24 sm:w-24 sm:h-36 bg-white rounded-lg shadow-2xl border border-slate-300 transform -rotate-12 animate-shuffle-1"></div>
+            <div className="absolute w-16 h-24 sm:w-24 sm:h-36 bg-white rounded-lg shadow-2xl border border-slate-300 transform rotate(12deg) animate-shuffle-2"></div>
+            <div className="absolute w-16 h-24 sm:w-24 sm:h-36 bg-emerald-500 rounded-lg shadow-2xl border border-emerald-400 flex items-center justify-center text-2xl sm:text-4xl animate-deal-cards">🎴</div>
           </div>
-          <h2 className="text-3xl font-black chinese-font text-emerald-400 animate-pulse tracking-widest">正在洗牌发牌...</h2>
+          <h2 className="text-xl sm:text-3xl font-black chinese-font text-emerald-400 animate-pulse tracking-widest">正在洗牌发牌...</h2>
         </div>
       )}
       
       {renderBettingOverlay()}
 
-      <div className="flex-1 flex flex-col h-full relative">
-        <div className="h-14 flex justify-between items-center px-4 bg-slate-900/80 backdrop-blur-md border-b border-white/5 z-50">
-          <div className="flex items-center gap-4 shrink-0"><div className="flex flex-col"><span className="text-xl font-black text-emerald-500 chinese-font">宣坨坨</span><span className="text-[8px] opacity-40 uppercase tracking-widest leading-none">NETWORK V2.0</span></div></div>
-          <div className="flex-1 flex justify-center items-center px-4 overflow-hidden gap-2">
+      <div className="flex-1 flex flex-col h-full relative overflow-hidden">
+        <div className="h-10 sm:h-14 flex justify-between items-center px-4 bg-slate-900/80 backdrop-blur-md border-b border-white/5 z-50">
+          <div className="flex items-center gap-4 shrink-0"><div className="flex flex-col"><span className="text-base sm:text-xl font-black text-emerald-500 chinese-font leading-none">宣坨坨</span><span className="text-[7px] sm:text-[8px] opacity-40 uppercase tracking-widest leading-none">V2.1</span></div></div>
+          <div className="flex-1 flex justify-center items-center px-2 sm:px-4 overflow-hidden gap-1 sm:gap-2">
             {gameState.grabber === PlayerId.PLAYER && (
-              <div className="bg-red-600 px-3 py-1 rounded-full shadow-lg animate-pulse shrink-0 border border-red-400/30">
-                <span className="text-[10px] md:text-xs font-black text-white whitespace-nowrap">🎴 已抢收 x{gameState.grabMultiplier}</span>
+              <div className="bg-red-600 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full shadow-lg shrink-0 border border-red-400/30">
+                <span className="text-[8px] sm:text-[10px] font-black text-white whitespace-nowrap">🎴 已抢收</span>
               </div>
             )}
-            {(gameState.challengers[PlayerId.PLAYER] || 0) > 0 && (
-              <div className="bg-orange-600 px-3 py-1 rounded-full shadow-lg shrink-0 border border-orange-400/30">
-                <span className="text-[10px] md:text-xs font-black text-white whitespace-nowrap">🔥 已应战 x{gameState.challengers[PlayerId.PLAYER]}</span>
-              </div>
-            )}
-            <div key={gameState.logs[0]} className="bg-slate-950/40 px-6 py-1.5 rounded-full border border-emerald-500/20 animate-in zoom-in slide-in-from-top-2 duration-300">
-               <span className="text-xs md:text-sm font-black text-emerald-400 chinese-font truncate block max-w-[150px] md:max-w-md">{gameState.logs[0] || '对局进行中...'}</span>
+            <div key={gameState.logs[0]} className="bg-slate-950/40 px-3 sm:px-6 py-1 rounded-full border border-emerald-500/20 animate-in zoom-in slide-in-from-top-2 duration-300">
+               <span className="text-[9px] sm:text-xs font-black text-emerald-400 chinese-font truncate block max-w-[100px] sm:max-w-md">{gameState.logs[0] || '对局开始...'}</span>
             </div>
           </div>
-          <div className="text-xs font-mono bg-black/60 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 shrink-0"><span className="text-yellow-500 text-base">🪙</span><span className="font-bold text-yellow-100">{gameState.starCoins[PlayerId.PLAYER]}</span></div>
+          <div className="text-[10px] sm:text-xs font-mono bg-black/60 px-2 sm:px-3 py-1 rounded-lg border border-white/10 flex items-center gap-1 sm:gap-2 shrink-0"><span className="text-yellow-500 text-sm sm:text-base">🪙</span><span className="font-bold text-yellow-100">{gameState.starCoins[PlayerId.PLAYER]}</span></div>
         </div>
 
-        <div className="flex-1 relative flex items-center justify-center landscape:pb-12">
+        <div className="flex-1 relative flex items-center justify-center p-2 sm:p-4">
           {[PlayerId.AI_LEFT, PlayerId.AI_RIGHT].map(id => (
-            <div key={id} className={`absolute top-6 ${id === PlayerId.AI_LEFT ? 'left-6' : 'right-6'} flex flex-col items-center gap-2 z-30`}>
+            <div key={id} className={`absolute top-2 sm:top-6 ${id === PlayerId.AI_LEFT ? 'left-2 sm:left-6' : 'right-2 sm:right-6'} flex flex-col items-center gap-1 sm:gap-2 z-30`}>
               <div className="relative">
-                <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl border-2 bg-slate-900 flex items-center justify-center text-2xl md:text-3xl shadow-2xl transition-all duration-500 ${gameState.turn === id && gameState.phase === GamePhase.PLAYING ? 'border-emerald-500 ring-4 ring-emerald-500/20 scale-110' : 'border-white/10'}`}>{slots[id].type === 'human' ? '侠' : (slots[id].type === 'ai' ? '🤖' : '👴')}</div>
-                {(gameState.challengers[id] || 0) > 0 && (<div className="absolute -top-3 -right-3 bg-orange-600 border-2 border-white text-white font-black text-[10px] w-9 h-9 flex items-center justify-center rounded-full shadow-lg animate-bounce">宣x{gameState.challengers[id]}</div>)}
-                {gameState.multipliers[id] > 1 && (<div className="absolute -bottom-1 -right-1 bg-yellow-500 text-black font-black text-[8px] px-1 rounded-md shadow-sm border border-slate-900">x{gameState.multipliers[id]}</div>)}
-                {gameState.grabber === id && (<div className="absolute top-[-8px] left-1/2 -translate-x-1/2 bg-red-600 text-white text-[8px] px-1.5 py-0.5 rounded-md font-black shadow-lg animate-pulse whitespace-nowrap">抢收牌</div>)}
+                <div className={`w-10 h-10 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl border-2 bg-slate-900 flex items-center justify-center text-xl sm:text-3xl shadow-2xl transition-all duration-500 ${gameState.turn === id && gameState.phase === GamePhase.PLAYING ? 'border-emerald-500 ring-2 sm:ring-4 ring-emerald-500/20 scale-110' : 'border-white/10'}`}>
+                  {slots[id].type === 'ai' ? '🤖' : '侠'}
+                </div>
+                {gameState.multipliers[id] > 1 && (<div className="absolute -bottom-1 -right-1 bg-yellow-500 text-black font-black text-[7px] sm:text-[8px] px-1 rounded shadow-sm border border-slate-900">x{gameState.multipliers[id]}</div>)}
+                {gameState.grabber === id && (<div className="absolute top-[-5px] left-1/2 -translate-x-1/2 bg-red-600 text-white text-[7px] sm:text-[8px] px-1 rounded-md font-black shadow-lg animate-pulse whitespace-nowrap">抢</div>)}
               </div>
-              <div className="flex flex-col items-center gap-0.5 text-center"><span className="text-[10px] md:text-[11px] font-black text-slate-300 chinese-font">{slots[id].name} ({gameState.hands[id].length})</span><div className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[8px] md:text-[9px] font-black">已收: {gameState.collected[id].length}</div></div>
+              <div className="flex flex-col items-center text-center">
+                <span className="text-[8px] sm:text-[10px] font-black text-slate-300 chinese-font truncate max-w-[50px] sm:max-w-none">{slots[id].name} ({gameState.hands[id].length})</span>
+                <div className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[7px] sm:text-[8px] font-black">收: {gameState.collected[id].length}</div>
+              </div>
             </div>
           ))}
-          <div className="flex items-center justify-center gap-8 md:gap-24 z-20 w-full max-w-5xl px-10 scale-90 md:scale-100">{renderTableSlot(PlayerId.AI_LEFT)}{renderTableSlot(PlayerId.PLAYER)}{renderTableSlot(PlayerId.AI_RIGHT)}</div>
+          <div className="flex items-center justify-center gap-4 sm:gap-24 z-20 w-full max-w-5xl px-4 sm:px-10 scale-90 sm:scale-100 overflow-visible">
+            {renderTableSlot(PlayerId.AI_LEFT)}
+            {renderTableSlot(PlayerId.PLAYER)}
+            {renderTableSlot(PlayerId.AI_RIGHT)}
+          </div>
           
           {gameState.phase === GamePhase.KOU_LE_DECISION && (
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-6 animate-in fade-in">
-              <div className="bg-slate-900 border border-emerald-500/40 p-8 rounded-3xl max-w-sm w-full text-center shadow-2xl">
-                <div className="text-3xl mb-4">⚖️</div>
-                <h3 className="text-xl font-black text-emerald-500 chinese-font mb-2">“扣了”博弈中</h3>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-slate-900 border border-emerald-500/40 p-6 sm:p-8 rounded-3xl max-w-xs sm:max-w-sm w-full text-center shadow-2xl">
+                <h3 className="text-lg sm:text-xl font-black text-emerald-500 chinese-font mb-4">“扣了”博弈</h3>
                 {(() => {
                   const respondents = getNextRespondents(gameState.kouLeInitiator!);
                   const currentDecider = respondents.find(id => gameState.kouLeResponses[id] === null);
-                  const pName = currentDecider === PlayerId.PLAYER ? slots[PlayerId.PLAYER].name : (currentDecider ? slots[currentDecider].name : '...');
+                  const deciderName = currentDecider === PlayerId.PLAYER ? '我' : slots[currentDecider!].name;
                   return (
                     <>
-                      <p className="text-sm text-slate-400 mb-6">{gameState.kouLeInitiator === PlayerId.PLAYER ? `您发起博弈，请 ${pName} 表态...` : `${slots[gameState.kouLeInitiator!].name} 发起博弈，当前 ${pName} 表态...`}</p>
+                      <p className="text-xs sm:text-sm text-slate-400 mb-6">等待 {deciderName} 决策...</p>
                       {currentDecider === PlayerId.PLAYER ? (
-                        <div className="flex gap-4 animate-in slide-in-from-bottom duration-500">
-                          <button onClick={() => processKouLeResponse(PlayerId.PLAYER, 'agree')} className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 rounded-xl font-black transition-all">扣了(同意)</button>
-                          <button onClick={() => processKouLeResponse(PlayerId.PLAYER, 'challenge')} className="flex-1 py-4 bg-orange-600 hover:bg-orange-500 rounded-xl font-black transition-all">宣(挑战)</button>
+                        <div className="flex gap-3 animate-in slide-in-from-bottom duration-500">
+                          <button onClick={() => processKouLeResponse(PlayerId.PLAYER, 'agree')} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-black text-xs">扣了</button>
+                          <button onClick={() => processKouLeResponse(PlayerId.PLAYER, 'challenge')} className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 rounded-xl font-black text-xs">宣</button>
                         </div>
                       ) : (
-                        <div className="flex flex-col items-center py-4 text-emerald-500"><div className="w-8 h-8 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-3"></div><span className="text-xs font-black">等待对方思考...</span></div>
+                        <div className="flex flex-col items-center py-2 text-emerald-500"><div className="w-6 h-6 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div></div>
                       )}
                     </>
                   );
@@ -734,20 +826,15 @@ const App: React.FC = () => {
           )}
         </div>
 
-        <div className="h-44 md:h-64 bg-slate-900/95 border-t border-white/5 p-4 flex flex-col items-center justify-end relative z-40">
-           <div className="absolute left-6 top-[-25px] px-4 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-[10px] font-black md:hidden shadow-lg backdrop-blur-md">已收: {gameState.collected[PlayerId.PLAYER].length}</div>
-           <div className="absolute left-1/2 -translate-x-1/2 top-[-25px] flex gap-2">
-             <div className="px-3 py-1 bg-black/40 border border-white/10 rounded-lg text-[10px] font-black text-yellow-500 shadow-md">我的加倍: x{gameState.multipliers[PlayerId.PLAYER]}</div>
-             <div className="px-3 py-1 bg-red-600/40 border border-white/10 rounded-lg text-[10px] font-black text-white shadow-md">全局倍率: x{gameState.grabMultiplier}</div>
-           </div>
-           <div className="flex gap-2 justify-center pb-4 px-10 overflow-visible max-w-7xl w-full">
+        <div className="h-32 sm:h-64 bg-slate-900/95 border-t border-white/5 p-2 sm:p-4 flex flex-col items-center justify-end relative z-40 shrink-0">
+           <div className="absolute left-4 top-[-20px] px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-[9px] font-black shadow-lg backdrop-blur-md">已收: {gameState.collected[PlayerId.PLAYER].length}</div>
+           <div className="flex gap-1.5 sm:gap-2 justify-center pb-2 px-2 overflow-visible w-full">
              {playerHandSorted.map((c, i) => { 
                 const isSel = selectedCards.some(sc => sc.id === c.id);
-                const isHovered = hoveredCardId === c.id;
-                const isActive = isSel || isHovered;
+                const isActive = isSel || hoveredCardId === c.id;
                 return (
-                  <div key={c.id} onMouseEnter={() => setHoveredCardId(c.id)} onMouseLeave={() => setHoveredCardId(null)} onClick={() => setSelectedCards(prev => isSel ? prev.filter(sc => sc.id !== c.id) : [...prev, c])} className={`transition-all duration-300 cursor-pointer relative ${isActive ? '-translate-y-12 scale-110' : ''}`} style={{ marginLeft: i === 0 ? 0 : '-2.5rem', zIndex: i }}>
-                    <div className={isActive ? 'drop-shadow-[0_0_25px_rgba(16,185,129,0.8)]' : 'drop-shadow-lg'}><PlayingCard card={c} /></div>
+                  <div key={c.id} onMouseEnter={() => setHoveredCardId(c.id)} onMouseLeave={() => setHoveredCardId(null)} onClick={() => setSelectedCards(prev => isSel ? prev.filter(sc => sc.id !== c.id) : [...prev, c])} className={`transition-all duration-300 cursor-pointer relative ${isActive ? '-translate-y-6 sm:-translate-y-12 scale-105 sm:scale-110' : ''}`} style={{ marginLeft: i === 0 ? 0 : (window.innerWidth < 640 ? '-1.8rem' : '-2.5rem'), zIndex: i }}>
+                    <div className={isActive ? 'drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] sm:drop-shadow-[0_0_25px_rgba(16,185,129,0.8)]' : 'drop-shadow-lg'}><PlayingCard card={c} size={window.innerWidth < 640 ? 'small' : 'normal'} /></div>
                   </div>
                 ); 
              })}
@@ -755,36 +842,38 @@ const App: React.FC = () => {
         </div>
       </div>
       
-      <div className="w-16 md:w-24 landscape:h-screen bg-slate-900/90 border-l border-white/10 flex flex-col items-center justify-center p-3 gap-5 md:gap-7 z-[100] backdrop-blur-lg shadow-2xl">
-        <button onClick={() => handleAction(false)} disabled={!canFollow} className={`w-12 h-12 md:w-16 md:h-16 flex items-center justify-center rounded-2xl font-black transition-all text-xl md:text-3xl border border-white/10 ${canFollow ? 'bg-emerald-600 hover:bg-emerald-500 active:scale-90 shadow-[0_0_25px_rgba(16,185,129,0.3)] text-white' : 'bg-slate-800/50 text-slate-700 opacity-40 cursor-not-allowed'}`}>{gameState.table.length === 0 ? '出' : '跟'}</button>
-        <button onClick={() => handleAction(true)} disabled={!canDiscard} className={`w-12 h-12 md:w-16 md:h-16 flex items-center justify-center rounded-2xl font-black transition-all text-xl md:text-3xl border border-white/10 ${canDiscard ? 'bg-orange-700 hover:bg-orange-600 active:scale-90 shadow-[0_0_25px_rgba(194,65,12,0.3)] text-white' : 'bg-slate-800/50 text-slate-700 opacity-40 cursor-not-allowed'}`}>扣</button>
-        <div className="h-px w-8 bg-white/10"></div>
-        <button onClick={handleHint} disabled={gameState.phase !== GamePhase.PLAYING || gameState.turn !== PlayerId.PLAYER} className={`w-12 h-12 md:w-16 md:h-16 flex items-center justify-center rounded-2xl font-black transition-all text-xl md:text-3xl border border-white/10 ${gameState.turn === PlayerId.PLAYER && gameState.phase === GamePhase.PLAYING ? 'bg-indigo-600 hover:bg-indigo-500 active:scale-90 shadow-[0_0_25px_rgba(79,70,229,0.3)] text-white' : 'bg-slate-800/50 text-slate-700 opacity-40 cursor-not-allowed'}`}>提</button>
-        <button onClick={() => setShowRules(true)} className="w-10 h-10 md:w-14 md:h-14 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-xl text-lg md:text-xl font-black text-slate-400 active:scale-90 transition-all border border-white/5">规</button>
-        <button onClick={() => setShowHistory(true)} className="w-10 h-10 md:w-14 md:h-14 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-xl border border-white/5 font-black text-lg md:text-xl chinese-font transition-all active:scale-90 text-slate-300">录</button>
+      <div className="w-full h-14 sm:w-24 landscape:h-screen bg-slate-900/90 border-t sm:border-t-0 sm:border-l border-white/10 flex flex-row sm:flex-col items-center justify-around sm:justify-center p-2 sm:p-3 gap-2 sm:gap-7 z-[100] backdrop-blur-lg shrink-0">
+        <button onClick={() => handleAction(false)} disabled={!canFollow} className={`flex-1 sm:flex-none w-auto sm:w-16 h-10 sm:h-16 flex items-center justify-center rounded-xl sm:rounded-2xl font-black transition-all text-sm sm:text-2xl border border-white/10 ${canFollow ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-800/50 text-slate-700 opacity-40 cursor-not-allowed'}`}>{gameState.table.length === 0 ? '出' : '跟'}</button>
+        <button onClick={() => handleAction(true)} disabled={!canDiscard} className={`flex-1 sm:flex-none w-auto sm:w-16 h-10 sm:h-16 flex items-center justify-center rounded-xl sm:rounded-2xl font-black transition-all text-sm sm:text-2xl border border-white/10 ${canDiscard ? 'bg-orange-700 hover:bg-orange-600 text-white' : 'bg-slate-800/50 text-slate-700 opacity-40 cursor-not-allowed'}`}>扣</button>
+        <div className="hidden sm:block h-px w-8 bg-white/10"></div>
+        <button onClick={handleHint} disabled={gameState.phase !== GamePhase.PLAYING || gameState.turn !== PlayerId.PLAYER} className={`w-10 sm:w-14 h-10 sm:h-14 flex items-center justify-center bg-indigo-600/30 hover:bg-indigo-600 rounded-xl font-black text-sm sm:text-xl text-indigo-400 hover:text-white transition-all`}>提</button>
+        <button onClick={() => setShowHistory(true)} className="w-10 sm:w-14 h-10 sm:h-14 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-xl text-sm sm:text-xl font-black text-slate-300 transition-all">录</button>
+        {canInitiateKouLe && (
+          <button onClick={() => processInitiateKouLe(PlayerId.PLAYER)} className="w-10 sm:w-14 h-10 sm:h-14 flex items-center justify-center bg-red-600 hover:bg-red-500 rounded-xl text-[10px] sm:text-sm font-black text-white animate-pulse">扣了</button>
+        )}
       </div>
 
       {gameState.phase === GamePhase.SETTLEMENT && (
         <div className="absolute inset-0 z-[300] bg-slate-950/98 flex items-center justify-center p-4 backdrop-blur-3xl animate-in zoom-in overflow-hidden">
-          <div className="max-w-md w-full max-h-[90vh] flex flex-col bg-slate-900 border border-emerald-500/40 p-5 md:p-10 rounded-[30px] md:rounded-[40px] shadow-2xl text-center overflow-hidden">
-            <h2 className="text-xl md:text-4xl font-black chinese-font text-emerald-500 mb-4 md:mb-6 tracking-widest shrink-0">对局结算</h2>
-            <div className="flex-1 overflow-y-auto space-y-3 md:space-y-4 mb-4 md:mb-8 pr-2 custom-scrollbar">
+          <div className="max-w-md w-full max-h-[95vh] flex flex-col bg-slate-900 border border-emerald-500/40 p-4 sm:p-8 rounded-[2rem] shadow-2xl text-center overflow-hidden">
+            <h2 className="text-xl sm:text-3xl font-black chinese-font text-emerald-500 mb-4 shrink-0">对局结算</h2>
+            <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-1 custom-scrollbar">
               {settlementData.map(res => (
-                <div key={res.id} className={`flex justify-between items-center p-4 bg-white/5 rounded-2xl border transition-all ${res.netGain < 0 ? 'border-red-500/30 opacity-70' : (res.netGain > 0 ? 'border-emerald-500/50 scale-105 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'border-white/5')}`}>
+                <div key={res.id} className={`flex justify-between items-center p-3 sm:p-4 bg-white/5 rounded-2xl border ${res.netGain > 0 ? 'border-emerald-500/50' : 'border-white/5'}`}>
                   <div className="flex flex-col items-start">
-                    <span className="font-black text-sm md:text-lg chinese-font">{slots[res.id].name}</span>
-                    <span className="text-[10px] text-yellow-500 font-bold uppercase">总倍率: x{res.finalMultiplier}</span>
+                    <span className="font-black text-sm sm:text-base chinese-font">{slots[res.id].name}</span>
+                    <span className="text-[8px] sm:text-[10px] text-slate-500 uppercase">x{res.finalMultiplier}</span>
                   </div>
                   <div className="flex flex-col items-end">
-                    <span className={`font-black px-2 md:px-3 py-0.5 md:py-1 rounded-lg text-[10px] md:text-sm ${res.coins > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>{res.level} ({res.cards}张)</span>
-                    <span className={`text-xs md:text-base font-black mt-1 ${res.netGain > 0 ? 'text-yellow-500' : (res.netGain < 0 ? 'text-red-500' : 'text-slate-400')}`}>{res.netGain > 0 ? `+${res.netGain}` : res.netGain} 🪙</span>
+                    <span className={`font-black px-2 py-0.5 rounded-lg text-[10px] sm:text-xs ${res.coins > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>{res.level} ({res.cards}张)</span>
+                    <span className={`text-sm sm:text-base font-black mt-1 ${res.netGain > 0 ? 'text-yellow-500' : (res.netGain < 0 ? 'text-red-500' : 'text-slate-400')}`}>{res.netGain > 0 ? `+${res.netGain}` : res.netGain} 🪙</span>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="shrink-0 space-y-2 md:space-y-3">
-              {isHost && (<button onClick={() => {setGameState(prev => ({...prev, phase: GamePhase.WAITING})); broadcast('SYNC_STATE', {...gameState, phase: GamePhase.WAITING});}} className="w-full py-3 md:py-5 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-black text-base md:text-xl shadow-2xl transition-all chinese-font active:scale-95">整 顿 再 战</button>)}
-              <button onClick={quitToLobby} className="w-full py-2 md:py-3 bg-slate-800 text-slate-400 rounded-xl text-[10px] md:text-xs font-black transition-all hover:bg-slate-700">返回大厅</button>
+            <div className="shrink-0 flex flex-col gap-2">
+              {isHost && (<button onClick={() => {setGameState(prev => ({...prev, phase: GamePhase.WAITING})); broadcast('SYNC_STATE', {...gameState, phase: GamePhase.WAITING});}} className="w-full py-3 sm:py-4 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-black text-base sm:text-xl shadow-2xl transition-all chinese-font active:scale-95">再 战 一 局</button>)}
+              <button onClick={quitToLobby} className="w-full py-2 bg-slate-800 text-slate-400 rounded-xl text-[10px] font-black hover:bg-slate-700">返回大厅</button>
             </div>
           </div>
         </div>
