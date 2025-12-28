@@ -52,7 +52,7 @@ const SoundEngine = {
   }
 };
 
-const AI_NAME_POOL = ['王铁柱', '李翠花', '赵大壮', '孙木耳', '钱多多', '周公瑾', '吴二娃', '郑牛牛', '刘大脑袋', '马马虎虎'];
+const AI_NAME_POOL = ['王铁柱', '李翠花', '赵大壮', '孙木耳', '钱多多', '周公瑾', '吴二娃', '郑牛牛', '刘大脑袋', '马马虎虎', '张三丰', '李探花', '阿珂', '韦小宝', '令狐冲'];
 
 interface SlotInfo {
   type: 'empty' | 'human' | 'ai';
@@ -302,33 +302,83 @@ const App: React.FC = () => {
     if (peerRef.current) return;
     const peer = new Peer();
     peerRef.current = peer;
-    peer.on('open', (id: string) => setMyId(id));
+    peer.on('open', (id: string) => {
+      setMyId(id);
+      // 检查 URL 是否有 room 参数
+      const params = new URLSearchParams(window.location.search);
+      const roomId = params.get('room');
+      if (roomId && roomId !== id) {
+        setTargetId(roomId);
+        // 延迟连接以确保 Peer 已就绪
+        setTimeout(() => {
+          const conn = peer.connect(roomId);
+          conn.on('open', () => {
+            connectionsRef.current[conn.peer] = conn;
+            setConnectedPeers([conn.peer]);
+            addLog(`已通过链接自动加入房间 ${roomId.slice(0,4)}。`);
+            setGameState(prev => ({ ...prev, phase: GamePhase.WAITING }));
+          });
+          conn.on('data', (data: NetworkMessage) => handleNetworkMessage(data));
+          conn.on('error', (err: any) => {
+             addLog("⚠️ 无法连接到房间。可能房主已退出或房间已满。");
+             window.history.replaceState({}, document.title, window.location.pathname);
+          });
+        }, 1000);
+      }
+    });
+
     peer.on('connection', (conn: any) => {
+      // 检查房间是否已满 (3人限制)
+      const currentHumanCount = Object.values(slots).filter(s => s.type === 'human').length;
+      if (currentHumanCount >= 3) {
+        conn.on('open', () => {
+          conn.send({ type: 'ERROR', payload: '房间已满 (最多3人)' });
+          setTimeout(() => conn.close(), 1000);
+        });
+        return;
+      }
+
       setIsHost(true);
       conn.on('open', () => {
         connectionsRef.current[conn.peer] = conn;
         setConnectedPeers(prev => [...prev, conn.peer]);
+        
         setSlots(prev => {
           const next = { ...prev };
           let assignedPlayerId: PlayerId | null = null;
-          if (next[PlayerId.AI_LEFT].type === 'empty') assignedPlayerId = PlayerId.AI_LEFT;
-          else if (next[PlayerId.AI_RIGHT].type === 'empty') assignedPlayerId = PlayerId.AI_RIGHT;
+          if (next[PlayerId.AI_LEFT].type !== 'human') assignedPlayerId = PlayerId.AI_LEFT;
+          else if (next[PlayerId.AI_RIGHT].type !== 'human') assignedPlayerId = PlayerId.AI_RIGHT;
+          
           if (assignedPlayerId) {
-            next[assignedPlayerId] = { type: 'human', peerId: conn.peer, name: `玩家 ${conn.peer.slice(0,4)}` };
+            // 挑选一个未使用的中文昵称
+            const usedNames = Object.values(next).map(s => s.name);
+            const availableNames = AI_NAME_POOL.filter(n => !usedNames.includes(n));
+            const randomName = availableNames[Math.floor(Math.random() * availableNames.length)] || `侠客 ${conn.peer.slice(0,2)}`;
+            
+            next[assignedPlayerId] = { type: 'human', peerId: conn.peer, name: randomName };
             setGameState(gs => {
-              const updated = { ...gs, aiNames: { ...gs.aiNames, [assignedPlayerId!]: next[assignedPlayerId!].name } };
+              const updated = { ...gs, aiNames: { ...gs.aiNames, [assignedPlayerId!]: randomName } };
               setTimeout(() => broadcast('SYNC_STATE', updated), 500);
               return updated;
             });
           }
           return { ...next };
         });
-        addLog(`系统: 玩家 ${conn.peer.slice(0,4)} 已进入。`);
+        addLog(`系统: 新玩家已加入。`);
       });
       conn.on('data', (data: NetworkMessage) => handleNetworkMessage(data));
-      conn.on('close', () => { delete connectionsRef.current[conn.peer]; setConnectedPeers(prev => prev.filter(p => p !== conn.peer)); });
+      conn.on('close', () => { 
+        delete connectionsRef.current[conn.peer]; 
+        setConnectedPeers(prev => prev.filter(p => p !== conn.peer)); 
+        setSlots(prev => {
+          const n = {...prev};
+          const sid = Object.keys(n).find(k => (n as any)[k].peerId === conn.peer) as PlayerId;
+          if(sid) n[sid] = { type: 'empty', name: '等待加入...' };
+          return n;
+        });
+      });
     });
-  }, [handleNetworkMessage, broadcast, addLog]);
+  }, [handleNetworkMessage, broadcast, addLog, slots]);
 
   useEffect(() => {
     initPeer();
@@ -338,7 +388,14 @@ const App: React.FC = () => {
   const joinRoom = () => {
     if (!targetId || targetId === myId) return;
     const conn = peerRef.current.connect(targetId);
-    conn.on('open', () => { connectionsRef.current[conn.peer] = conn; setConnectedPeers([conn.peer]); addLog(`已成功连接房主 ${targetId.slice(0,4)}。`); setGameState(prev => ({ ...prev, phase: GamePhase.WAITING })); });
+    conn.on('open', () => { 
+      connectionsRef.current[conn.peer] = conn; 
+      setConnectedPeers([conn.peer]); 
+      addLog(`已成功连接房主 ${targetId.slice(0,4)}。`); 
+      setGameState(prev => ({ ...prev, phase: GamePhase.WAITING })); 
+      // 更新 URL 方便刷新
+      window.history.replaceState({}, document.title, `?room=${targetId}`);
+    });
     conn.on('data', (data: NetworkMessage) => handleNetworkMessage(data));
   };
 
@@ -418,6 +475,15 @@ const App: React.FC = () => {
     setSelectedCards(recommended);
   };
 
+  const handleShareRoom = () => {
+    if (!myId) return;
+    const baseUrl = window.location.origin + window.location.pathname;
+    const shareUrl = `${baseUrl}?room=${myId}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      addLog("✅ 房间邀请链接已复制！发送给好友即可加入对战。");
+    });
+  };
+
   const quitToLobby = () => {
     if (peerRef.current) {
       peerRef.current.destroy();
@@ -433,6 +499,8 @@ const App: React.FC = () => {
       [PlayerId.AI_RIGHT]: { type: 'empty', name: '等待加入...' },
     });
     setGameState(INITIAL_GAME_STATE(gameState.starCoins));
+    // 清理 URL 参数
+    window.history.replaceState({}, document.title, window.location.pathname);
     setTimeout(() => initPeer(), 100);
   };
 
@@ -574,23 +642,50 @@ const App: React.FC = () => {
       {showRules && renderRulesModal()}
       {gameState.phase === GamePhase.WAITING && (
         <div className="absolute inset-0 z-[400] bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6">
-          <h2 className="text-2xl font-black chinese-font text-emerald-500 mb-12">等待备战中...</h2>
-          <div className="flex items-center justify-center gap-12 md:gap-24 mb-16">
+          <div className="flex flex-col items-center gap-2 mb-10">
+            <h2 className="text-2xl font-black chinese-font text-emerald-500">等待备战中...</h2>
+            {isHost && (
+              <button onClick={handleShareRoom} className="px-4 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-black hover:bg-emerald-600/30 transition-all flex items-center gap-2">
+                🔗 分享房间邀请好友
+              </button>
+            )}
+          </div>
+          
+          <div className="flex items-center justify-center gap-8 md:gap-24 mb-16">
             {[PlayerId.AI_LEFT, PlayerId.PLAYER, PlayerId.AI_RIGHT].map(id => (
               <div key={id} className={`flex flex-col items-center gap-4 ${id === PlayerId.PLAYER ? 'mt-20' : ''}`}>
                  <div className={`w-20 h-20 md:w-28 md:h-28 rounded-full border-2 flex items-center justify-center text-4xl shadow-2xl transition-all ${id === PlayerId.PLAYER ? 'border-emerald-500 bg-slate-800' : (slots[id].type === 'empty' ? 'border-dashed border-slate-700 bg-slate-900/50 grayscale' : 'border-emerald-500 bg-slate-800')}`}>
-                    {id === PlayerId.PLAYER ? '👤' : (slots[id].type === 'empty' ? '?' : (slots[id].type === 'ai' ? '🤖' : '👴'))}
+                    {id === PlayerId.PLAYER ? '👤' : (slots[id].type === 'empty' ? '?' : (slots[id].type === 'ai' ? '🤖' : '侠'))}
                  </div>
                  <div className="text-center">
-                    <div className="text-xs font-black text-slate-300 chinese-font">{id === PlayerId.PLAYER ? '我自己 (房主)' : slots[id].name}</div>
+                    <div className="text-xs font-black text-slate-300 chinese-font">{slots[id].name}</div>
                     {isHost && id !== PlayerId.PLAYER && slots[id].type !== 'human' && (
-                      <button onClick={() => setSlots(prev => { const n = {...prev}; if(n[id].type === 'empty') { const name = AI_NAME_POOL.filter(n => !Object.values(gameState.aiNames).includes(n))[0] || 'AI'; n[id] = { type: 'ai', name }; setGameState(gs => ({...gs, aiNames: {...gs.aiNames, [id]: name}})); } else { n[id] = { type: 'empty', name: '等待加入...' }; setGameState(gs => ({...gs, aiNames: {...gs.aiNames, [id]: 'AI'}})); } return n; })} className="mt-2 text-[10px] text-emerald-500 hover:underline">{slots[id].type === 'empty' ? '+ 添加 AI' : '× 移除 AI'}</button>
+                      <button onClick={() => setSlots(prev => { 
+                        const n = {...prev}; 
+                        if(n[id].type === 'empty') { 
+                          const usedNames = Object.values(slots).map(s => s.name);
+                          const name = AI_NAME_POOL.filter(n => !usedNames.includes(n))[0] || 'AI'; 
+                          n[id] = { type: 'ai', name }; 
+                          setGameState(gs => ({...gs, aiNames: {...gs.aiNames, [id]: name}})); 
+                        } else { 
+                          n[id] = { type: 'empty', name: '等待加入...' }; 
+                          setGameState(gs => ({...gs, aiNames: {...gs.aiNames, [id]: 'AI'}})); 
+                        } 
+                        return n; 
+                      })} className="mt-2 text-[10px] text-emerald-500 hover:underline">
+                        {slots[id].type === 'empty' ? '+ 添加 AI' : '× 移除 AI'}
+                      </button>
                     )}
                  </div>
               </div>
             ))}
           </div>
-          {isHost ? (<button onClick={() => initGame()} disabled={slots[PlayerId.AI_LEFT].type === 'empty' || slots[PlayerId.AI_RIGHT].type === 'empty'} className={`px-20 py-6 rounded-3xl font-black text-2xl transition-all chinese-font shadow-2xl ${slots[PlayerId.AI_LEFT].type !== 'empty' && slots[PlayerId.AI_RIGHT].type !== 'empty' ? 'bg-emerald-600 hover:scale-105 active:scale-95' : 'bg-slate-800 text-slate-600 opacity-50 cursor-not-allowed'}`}>开 始 游 戏</button>) : (<div className="text-emerald-500 animate-pulse font-black chinese-font text-xl">房主正在配置席位...</div>)}
+          {isHost ? (
+            <div className="flex flex-col gap-4 w-full max-w-sm">
+              <button onClick={() => initGame()} disabled={slots[PlayerId.AI_LEFT].type === 'empty' || slots[PlayerId.AI_RIGHT].type === 'empty'} className={`px-20 py-6 rounded-3xl font-black text-2xl transition-all chinese-font shadow-2xl ${slots[PlayerId.AI_LEFT].type !== 'empty' && slots[PlayerId.AI_RIGHT].type !== 'empty' ? 'bg-emerald-600 hover:scale-105 active:scale-95' : 'bg-slate-800 text-slate-600 opacity-50 cursor-not-allowed'}`}>开 始 游 戏</button>
+              <button onClick={quitToLobby} className="py-3 text-slate-500 text-xs font-black hover:text-slate-300 transition-all uppercase tracking-widest">解散房间并返回</button>
+            </div>
+          ) : (<div className="text-emerald-500 animate-pulse font-black chinese-font text-xl">房主正在配置席位...</div>)}
         </div>
       )}
       {gameState.phase === GamePhase.DEALING && (
@@ -621,14 +716,14 @@ const App: React.FC = () => {
           {[PlayerId.AI_LEFT, PlayerId.AI_RIGHT].map(id => (
             <div key={id} className={`absolute top-6 ${id === PlayerId.AI_LEFT ? 'left-6' : 'right-6'} flex flex-col items-center gap-2 z-30`}>
               <div className="relative">
-                <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl border-2 bg-slate-900 flex items-center justify-center text-2xl md:text-3xl shadow-2xl transition-all duration-500 ${gameState.turn === id ? 'border-emerald-500 ring-4 ring-emerald-500/20 scale-110' : 'border-white/10'}`}>{slots[id].type === 'ai' ? '🤖' : '👴'}</div>
+                <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl border-2 bg-slate-900 flex items-center justify-center text-2xl md:text-3xl shadow-2xl transition-all duration-500 ${gameState.turn === id ? 'border-emerald-500 ring-4 ring-emerald-500/20 scale-110' : 'border-white/10'}`}>{slots[id].type === 'human' ? '侠' : (slots[id].type === 'ai' ? '🤖' : '👴')}</div>
                 {(gameState.challengers[id] || 0) > 0 && (
                   <div className="absolute -top-3 -right-3 bg-orange-600 border-2 border-white text-white font-black text-[10px] w-9 h-9 flex items-center justify-center rounded-full shadow-lg animate-bounce">
                     宣x{gameState.challengers[id]}
                   </div>
                 )}
               </div>
-              <div className="flex flex-col items-center gap-0.5 text-center"><span className="text-[10px] md:text-[11px] font-black text-slate-300 chinese-font">{gameState.aiNames[id]} ({gameState.hands[id].length})</span><div className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[8px] md:text-[9px] font-black">已收: {gameState.collected[id].length}</div></div>
+              <div className="flex flex-col items-center gap-0.5 text-center"><span className="text-[10px] md:text-[11px] font-black text-slate-300 chinese-font">{slots[id].name} ({gameState.hands[id].length})</span><div className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[8px] md:text-[9px] font-black">已收: {gameState.collected[id].length}</div></div>
             </div>
           ))}
           <div className="flex items-center justify-center gap-8 md:gap-24 z-20 w-full max-w-5xl px-10 scale-90 md:scale-100">{renderTableSlot(PlayerId.AI_LEFT)}{renderTableSlot(PlayerId.PLAYER)}{renderTableSlot(PlayerId.AI_RIGHT)}</div>
@@ -665,14 +760,14 @@ const App: React.FC = () => {
                 {(() => {
                   const respondents = getNextRespondents(gameState.kouLeInitiator!);
                   const currentDecider = respondents.find(id => gameState.kouLeResponses[id] === null);
-                  const pName = currentDecider === PlayerId.PLAYER ? '您' : gameState.aiNames[currentDecider!];
+                  const pName = currentDecider === PlayerId.PLAYER ? slots[PlayerId.PLAYER].name : slots[currentDecider!].name;
                   
                   return (
                     <>
                       <p className="text-sm text-slate-400 mb-6">
                         {gameState.kouLeInitiator === PlayerId.PLAYER 
                           ? `您发起博弈，请 ${pName} 表态...` 
-                          : `${gameState.aiNames[gameState.kouLeInitiator!]} 发起博弈，当前 ${pName} 表态...`}
+                          : `${slots[gameState.kouLeInitiator!].name} 发起博弈，当前 ${pName} 表态...`}
                       </p>
                       
                       {currentDecider === PlayerId.PLAYER ? (
@@ -693,7 +788,7 @@ const App: React.FC = () => {
                 <div className="mt-6 space-y-2 text-left">
                   {Object.entries(gameState.kouLeResponses).map(([id, resp]) => resp && id !== gameState.kouLeInitiator && (
                     <div key={id} className={`p-2 rounded-lg flex justify-between items-center transition-all ${resp === 'challenge' ? 'bg-orange-500/10 border border-orange-500/30 animate-pulse' : 'bg-slate-800/50'}`}>
-                      <span className={`text-xs font-black ${resp === 'challenge' ? 'text-orange-400' : 'text-slate-400'}`}>{id === PlayerId.PLAYER ? '您' : gameState.aiNames[id]}</span>
+                      <span className={`text-xs font-black ${resp === 'challenge' ? 'text-orange-400' : 'text-slate-400'}`}>{slots[id as PlayerId].name}</span>
                       <span className={`text-[10px] font-black px-2 py-0.5 rounded ${resp === 'challenge' ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-400'}`}>{resp === 'agree' ? '扣了' : '应战'}</span>
                     </div>
                   ))}
@@ -734,7 +829,7 @@ const App: React.FC = () => {
                               <span className="text-sm font-black text-slate-500 chinese-font">第 {idx + 1} 轮对局</span>
                               <div className="flex items-center gap-2 bg-emerald-500/20 px-3 py-1 rounded-full ring-1 ring-emerald-500/30">
                                 <span className="text-emerald-400 text-[10px] font-black uppercase">胜者:</span>
-                                <span className="text-white text-xs font-black chinese-font">{winnerId === PlayerId.PLAYER ? '您自己' : gameState.aiNames[winnerId]}</span>
+                                <span className="text-white text-xs font-black chinese-font">{slots[winnerId].name}</span>
                               </div>
                             </div>
                             <div className="text-[10px] font-mono text-slate-700 uppercase tracking-widest">Round Stats</div>
@@ -744,7 +839,7 @@ const App: React.FC = () => {
                             {[PlayerId.AI_LEFT, PlayerId.PLAYER, PlayerId.AI_RIGHT].map((pid) => {
                               const play = round.find(r => r.playerId === pid);
                               const isWinner = pid === winnerId;
-                              const pName = pid === PlayerId.PLAYER ? '您自己' : gameState.aiNames[pid];
+                              const pName = slots[pid].name;
 
                               return (
                                 <div key={pid} className={`flex flex-col gap-3 p-3 md:p-4 rounded-2xl transition-all duration-500 ${isWinner ? 'bg-emerald-500/10 ring-2 ring-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-black/40 border border-white/5'}`}>
@@ -866,7 +961,7 @@ const App: React.FC = () => {
             <div className="flex-1 overflow-y-auto space-y-3 md:space-y-4 mb-4 md:mb-8 pr-2 custom-scrollbar">
               {settlementData.map(res => (
                 <div key={res.id} className={`flex justify-between items-center p-4 bg-white/5 rounded-2xl border transition-all ${res.netGain < 0 ? 'border-red-500/30 opacity-70' : (res.netGain > 0 ? 'border-emerald-500/50 scale-105 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'border-white/5')}`}>
-                  <span className="font-black text-sm md:text-lg chinese-font">{res.id === PlayerId.PLAYER ? '您自己' : gameState.aiNames[res.id]}</span>
+                  <span className="font-black text-sm md:text-lg chinese-font">{slots[res.id].name}</span>
                   <div className="flex flex-col items-end">
                     <span className={`font-black px-2 md:px-3 py-0.5 md:py-1 rounded-lg text-[10px] md:text-sm ${res.coins > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>{res.level} ({res.cards}张)</span>
                     <span className={`text-xs md:text-base font-black mt-1 ${res.netGain > 0 ? 'text-yellow-500' : (res.netGain < 0 ? 'text-red-500' : 'text-slate-400')}`}>{res.netGain > 0 ? `+${res.netGain}` : res.netGain} 🪙</span>
