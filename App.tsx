@@ -19,7 +19,7 @@ declare var Peer: any;
 const SoundEngine = {
   ctx: null as AudioContext | null,
   init() {
-    if (!this.ctx) this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)());
+    if (!this.ctx) this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     if (this.ctx.state === 'suspended') this.ctx.resume();
   },
   play(type: 'deal' | 'play' | 'win' | 'settle' | 'victory' | 'defeat' | 'shuffle') {
@@ -94,6 +94,7 @@ const App: React.FC = () => {
   const peerRef = useRef<any>(null);
   const connectionsRef = useRef<Record<string, any>>({});
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
+  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   const playerHandSorted = useMemo(() => {
@@ -120,7 +121,6 @@ const App: React.FC = () => {
       else res.netGain = -(winners.reduce((sum, w) => sum + w.coins, 0));
     });
 
-    // 扣了风险支付逻辑 (支持倍数)
     if (gameState.kouLeInitiator) {
       const initiatorStat = stats.find(s => s.id === gameState.kouLeInitiator)!;
       const initiatorRes = results.find(r => r.id === gameState.kouLeInitiator)!;
@@ -131,7 +131,7 @@ const App: React.FC = () => {
             const chalStat = stats.find(s => s.id === chalId)!;
             const chalRes = results.find(r => r.id === chalId)!;
             if (chalStat.coins === 0) {
-              const riskAmount = initiatorStat.coins * 2 * chalCount; // 倍数累加
+              const riskAmount = initiatorStat.coins * 2 * chalCount; 
               chalRes.netGain -= riskAmount;
               chalRes.multiplier = chalCount * 2;
               initiatorRes.netGain += riskAmount;
@@ -209,7 +209,6 @@ const App: React.FC = () => {
     }, 2000);
   }, [isHost, broadcast, addLog]);
 
-  // 辅助函数：获取发起者之后的顺序
   const getNextRespondents = (initiator: PlayerId): PlayerId[] => {
     const order = [PlayerId.PLAYER, PlayerId.AI_RIGHT, PlayerId.AI_LEFT];
     const idx = order.indexOf(initiator);
@@ -230,16 +229,14 @@ const App: React.FC = () => {
         const currentCount = newChallengers[pid] + 1;
         newLogs.unshift(`🔥 宣战: 【${pName}】 选择了“宣”(应战)！当前倍率: ${currentCount * 2}x。另一方无需决策。`);
         newChallengers[pid] = currentCount;
-        nextPhase = GamePhase.PLAYING; // 有人宣，阶段直接结束进入对局
+        nextPhase = GamePhase.PLAYING; 
       } else {
         newLogs.unshift(`✓ 响应: ${pName} 选择了“扣了”`);
-        // 如果是最后一个人表态完了
         if (newRes[respondents[1]] !== null) {
           newLogs.unshift("🤝 结果: 达成共识(均扣了)，正在重新洗牌...");
           nextPhase = GamePhase.SETTLEMENT;
           SoundEngine.play('settle');
         } else {
-          // 轮到下一个人表态
           newLogs.unshift(`⏳ 等待: 请 ${prev.aiNames[respondents[1]] || '您'} 做出决策...`);
         }
       }
@@ -632,7 +629,28 @@ const App: React.FC = () => {
            <div className="absolute left-6 top-[-25px] px-4 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-[10px] font-black md:hidden shadow-lg backdrop-blur-md">已收: {gameState.collected[PlayerId.PLAYER].length}</div>
            {gameState.phase === GamePhase.PLAYING && gameState.turn === PlayerId.PLAYER && gameState.table.length === 0 && (<button onClick={() => isHost ? processInitiateKouLe(PlayerId.PLAYER) : sendToHost('ACTION_KOU_LE_INIT', {playerId: PlayerId.PLAYER})} className="absolute top-[-50px] left-1/2 -translate-x-1/2 px-8 py-2 bg-orange-900/40 border border-orange-500/30 rounded-full text-orange-400 text-xs font-black hover:bg-orange-800 transition-all z-50 backdrop-blur-md">发起“扣了”？</button>)}
            <div className="flex-1 flex gap-2 justify-center pb-4 px-10 overflow-visible max-w-7xl">
-             {playerHandSorted.map((c, i) => { const isSel = selectedCards.some(sc => sc.id === c.id); return (<div key={c.id} onClick={() => setSelectedCards(prev => isSel ? prev.filter(sc => sc.id !== c.id) : [...prev, c])} className={`transition-all duration-300 cursor-pointer relative ${isSel ? '-translate-y-12 scale-110' : 'hover:-translate-y-8 hover:scale-105'}`} style={{ marginLeft: i === 0 ? 0 : '-2.5rem', zIndex: isSel ? 500 : 10 + i }}><div className={isSel ? 'drop-shadow-[0_0_25px_rgba(16,185,129,0.8)]' : 'drop-shadow-lg'}><PlayingCard card={c} /></div></div>); })}
+             {playerHandSorted.map((c, i) => { 
+                const isSel = selectedCards.some(sc => sc.id === c.id);
+                const isHovered = hoveredCardId === c.id;
+                const isActive = isSel || isHovered;
+                return (
+                  <div 
+                    key={c.id} 
+                    onMouseEnter={() => setHoveredCardId(c.id)}
+                    onMouseLeave={() => setHoveredCardId(null)}
+                    onClick={() => setSelectedCards(prev => isSel ? prev.filter(sc => sc.id !== c.id) : [...prev, c])} 
+                    className={`transition-all duration-300 cursor-pointer relative ${isActive ? '-translate-y-12 scale-110' : ''}`} 
+                    style={{ 
+                      marginLeft: i === 0 ? 0 : '-2.5rem', 
+                      zIndex: i // 严格遵循从左到右递增，左侧抬起的牌不会遮挡右侧内容
+                    }}
+                  >
+                    <div className={isActive ? 'drop-shadow-[0_0_25px_rgba(16,185,129,0.8)]' : 'drop-shadow-lg'}>
+                      <PlayingCard card={c} />
+                    </div>
+                  </div>
+                ); 
+             })}
            </div>
         </div>
       </div>
