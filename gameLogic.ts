@@ -112,19 +112,42 @@ export const aiDecidePlay = (hand: Card[], targetPlay: Play | null, currentMaxSt
     return validOptions.sort((a,b) => a[0].strength - b[0].strength)[0];
   }
 
-  const roundValue = targetPlay.cards.length * 3;
-  const potentialTotal = collectedCount + roundValue;
-  const isCrucialWin = (collectedCount < 9 && potentialTotal >= 9) || (collectedCount < 15 && potentialTotal >= 15);
-
   validOptions.sort((a,b) => calculatePlayStrength(a).strength - calculatePlayStrength(b).strength);
   return validOptions[0];
 };
 
 /**
- * AI 决策是否接受扣了挑战
+ * AI 决策博弈行为
+ * @param hand 手牌
+ * @param currentGrabMultiplier 当前全局抢牌倍数
+ * @param grabberId 当前抢牌者ID
  */
+export const aiDecideBet = (hand: Card[], currentGrabMultiplier: number, grabberId: PlayerId | null): { multiplier: number; grab: boolean } => {
+  const topCardsCount = hand.filter(c => c.strength >= 22).length; 
+  const pairCount = getValidPlays(hand, null).filter(p => p.length === 2).length;
+  const tripleCount = getValidPlays(hand, null).filter(p => p.length === 3).length;
+
+  let score = topCardsCount * 2 + pairCount + tripleCount * 3;
+  
+  // 抢收牌决策
+  let wantGrab = false;
+  if (score >= 8) wantGrab = true;
+  else if (score >= 5 && Math.random() > 0.6) wantGrab = true;
+
+  // 如果已经有人抢了，AI 只有在分高时才“顶抢”
+  if (grabberId !== null && wantGrab) {
+    if (score < 10) wantGrab = false; 
+  }
+
+  // 加倍决策
+  let multiplier = 1;
+  if (score >= 12) multiplier = 4;
+  else if (score >= 6) multiplier = 2;
+
+  return { multiplier, grab: wantGrab };
+};
+
 export const aiEvaluateKouLe = (hand: Card[], collectedCount: number): 'agree' | 'challenge' => {
-  // 简单的启发式逻辑：如果有顶级大牌或者已收牌不少，则挑战
   const topCardsCount = hand.filter(c => c.strength >= 22).length;
   const pairCount = getValidPlays(hand, null).filter(p => p.length === 2).length;
   

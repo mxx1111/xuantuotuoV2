@@ -22,6 +22,7 @@ export enum GamePhase {
   LOBBY = 'lobby',
   WAITING = 'waiting',
   DEALING = 'dealing',
+  BETTING = 'betting', 
   PLAYING = 'playing',
   ROUND_OVER = 'round_over',
   KOU_LE_DECISION = 'kou_le_decision',
@@ -44,12 +45,17 @@ export interface GameState {
   starter: PlayerId;
   starCoins: Record<PlayerId, number>;
   kouLeInitiator: PlayerId | null;
-  challengers: Record<PlayerId, number>; // 修改为记录次数：{playerId: count}
+  challengers: Record<PlayerId, number>; 
   kouLeResponses: Record<PlayerId, 'agree' | 'challenge' | null>;
   logs: string[];
   aiNames: Record<string, string>;
   roundHistory: Play[][];
   nextStarter: PlayerId | null;
+  multipliers: Record<PlayerId, number>; 
+  grabber: PlayerId | null; 
+  grabMultiplier: number; // 全局抢牌倍数 (1, 2, 4, 8...)
+  betTurn: PlayerId | null; // 当前轮到谁进行博弈决策
+  betResponses: Record<PlayerId, boolean>; 
 }
 
 export enum RewardLevel {
@@ -59,13 +65,14 @@ export enum RewardLevel {
   CI_LE = '此了'
 }
 
-// 联机消息
 export type NetworkMessageType = 
   | 'SYNC_STATE' 
   | 'ACTION_PLAY' 
   | 'ACTION_KOU_LE_INIT' 
   | 'ACTION_KOU_LE_RES' 
-  | 'START_GAME';
+  | 'ACTION_BET' 
+  | 'START_GAME'
+  | 'ERROR';
 
 export interface NetworkMessage {
   type: NetworkMessageType;
