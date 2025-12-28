@@ -106,7 +106,6 @@ const App: React.FC = () => {
   const connectionsRef = useRef<Record<string, any>>({});
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
-  const logContainerRef = useRef<HTMLDivElement>(null);
 
   const playerHandSorted = useMemo(() => {
     return [...gameState.hands[PlayerId.PLAYER]].sort((a, b) => a.strength - b.strength);
@@ -116,9 +115,15 @@ const App: React.FC = () => {
     setGameState(prev => ({ ...prev, logs: [msg, ...prev.logs].slice(0, 30) }));
   }, []);
 
+  // 修改：返回响应者的顺时针顺序 [下家, 下下家]
   const getNextRespondents = useCallback((initiator: PlayerId) => {
     const order = [PlayerId.PLAYER, PlayerId.AI_RIGHT, PlayerId.AI_LEFT];
-    return order.filter(id => id !== initiator);
+    const idx = order.indexOf(initiator);
+    const sorted = [];
+    for(let i = 1; i < 3; i++) {
+        sorted.push(order[(idx + i) % 3]);
+    }
+    return sorted;
   }, []);
 
   const broadcast = useCallback((type: string, payload: any) => {
@@ -338,6 +343,7 @@ const App: React.FC = () => {
     });
   }, [isHost, broadcast, slots]);
 
+  // 修改：响应逻辑顺序化，有人宣则博弈立即达成
   const processKouLeResponse = useCallback((pid: PlayerId, response: 'agree' | 'challenge') => {
     setGameState(prev => {
       const newResponses = { ...prev.kouLeResponses, [pid]: response };
@@ -349,21 +355,31 @@ const App: React.FC = () => {
       const pName = pid === PlayerId.PLAYER ? '您' : slots[pid].name;
       const logs = [`${pName} 选择了 ${response === 'agree' ? '同意(扣了)' : '宣(挑战)'}`, ...prev.logs];
 
-      const respondents = getNextRespondents(prev.kouLeInitiator!);
-      const allResponded = respondents.every(id => newResponses[id] !== null);
+      const initiator = prev.kouLeInitiator!;
+      const respondents = getNextRespondents(initiator);
 
-      if (allResponded) {
-        const anyChallenge = Object.values(newResponses).some(r => r === 'challenge');
-        if (!anyChallenge) {
+      // 如果有人选择挑战（宣），博弈立即达成，结束决策阶段
+      if (response === 'challenge') {
+        logs.unshift('⚔️ 有人选择“宣”，博弈达成，游戏继续！');
+        const nextS = { ...prev, kouLeResponses: newResponses, challengers: newChallengers, logs: logs.slice(0, 30), phase: GamePhase.PLAYING };
+        if (isHost) broadcast('SYNC_STATE', nextS);
+        return nextS;
+      }
+
+      // 如果是同意，检查是否是最后一个响应者
+      const isLastRespondent = respondents[respondents.length - 1] === pid;
+      if (isLastRespondent) {
+        const allAgreed = respondents.every(id => newResponses[id] === 'agree');
+        if (allAgreed) {
           logs.unshift('🔄 全员同意“扣了”，本局作废，重新发牌。');
           setTimeout(() => initGame(prev.starter), 1500);
-          return { ...prev, kouLeResponses: newResponses, logs: logs.slice(0, 30), phase: GamePhase.DEALING };
-        } else {
-          logs.unshift('⚔️ 有人选择“宣”，博弈达成，游戏继续！');
-          return { ...prev, kouLeResponses: newResponses, challengers: newChallengers, logs: logs.slice(0, 30), phase: GamePhase.PLAYING };
+          const nextS = { ...prev, kouLeResponses: newResponses, logs: logs.slice(0, 30), phase: GamePhase.DEALING };
+          if (isHost) broadcast('SYNC_STATE', nextS);
+          return nextS;
         }
       }
 
+      // 否则，等待下一个人的响应
       const nextS = { ...prev, kouLeResponses: newResponses, challengers: newChallengers, logs: logs.slice(0, 30) };
       if (isHost) broadcast('SYNC_STATE', nextS);
       return nextS;
@@ -426,7 +442,7 @@ const App: React.FC = () => {
     }
   }, [isHost, processBet, processPlayCards, processInitiateKouLe, processKouLeResponse]);
 
-  // AI 逻辑控制
+  // AI 逻辑控制: 加倍博弈阶段
   useEffect(() => {
     if (isHost && gameState.phase === GamePhase.BETTING && gameState.betTurn && slots[gameState.betTurn!].type === 'ai') {
       const timer = setTimeout(() => {
@@ -437,6 +453,7 @@ const App: React.FC = () => {
     }
   }, [isHost, gameState.phase, gameState.betTurn, gameState.hands, gameState.grabMultiplier, gameState.grabber, slots, processBet]);
 
+  // AI 逻辑控制: 出牌阶段
   useEffect(() => {
     if (isHost && gameState.phase === GamePhase.PLAYING && slots[gameState.turn].type === 'ai' && gameState.table.length < 3) {
       const timer = setTimeout(() => {
@@ -452,6 +469,26 @@ const App: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [isHost, gameState.phase, gameState.turn, gameState.hands, gameState.table, gameState.collected, slots, processPlayCards]);
+
+  // AI 逻辑控制: “扣了”博弈响应阶段
+  useEffect(() => {
+    if (isHost && gameState.phase === GamePhase.KOU_LE_DECISION) {
+      const initiator = gameState.kouLeInitiator;
+      if (!initiator) return;
+
+      const respondents = getNextRespondents(initiator);
+      // AI 仅在轮到自己表态时思考
+      const currentDecider = respondents.find(id => gameState.kouLeResponses[id] === null);
+
+      if (currentDecider && slots[currentDecider].type === 'ai') {
+        const timer = setTimeout(() => {
+          const decision = aiEvaluateKouLe(gameState.hands[currentDecider], gameState.collected[currentDecider].length);
+          processKouLeResponse(currentDecider, decision);
+        }, 1500 + Math.random() * 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isHost, gameState.phase, gameState.kouLeInitiator, gameState.kouLeResponses, gameState.hands, gameState.collected, slots, processKouLeResponse, getNextRespondents]);
 
   const quitToLobby = useCallback(() => {
     setGameState(INITIAL_GAME_STATE(gameState.starCoins));
@@ -487,14 +524,14 @@ const App: React.FC = () => {
   }, [gameState.hands, gameState.table, addLog]);
 
   const renderLobby = () => (
-    <div className="absolute inset-0 z-[500] bg-slate-950 flex flex-col items-center justify-center p-6 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
-      <div className="text-center mb-12 animate-in fade-in slide-in-from-top-10 duration-1000">
-        <h1 className="text-7xl font-black chinese-font text-emerald-500 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] mb-2">宣 坨 坨</h1>
+    <div className="absolute inset-0 z-[500] bg-slate-950 flex flex-col items-center justify-center p-6 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] overflow-y-auto custom-scrollbar">
+      <div className="text-center mt-8 mb-12 animate-in fade-in slide-in-from-top-10 duration-1000">
+        <h1 className="text-7xl font-black chinese-font text-emerald-500 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] mb-2 leading-tight py-4">宣 坨 坨</h1>
         <p className="text-slate-500 uppercase tracking-[0.3em] text-xs font-bold">Traditional Shanxi Strategy Game</p>
       </div>
       
       <div className="flex flex-col gap-5 w-full max-w-sm animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
-        <button onClick={() => { setIsHost(true); setGameState(prev => ({...prev, phase: GamePhase.WAITING})); }} className="group relative overflow-hidden py-6 rounded-3xl bg-emerald-600 font-black text-2xl chinese-font shadow-[0_10px_40px_-10px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95 transition-all">
+        <button onClick={() => { SoundEngine.init(); setIsHost(true); setGameState(prev => ({...prev, phase: GamePhase.WAITING})); }} className="group relative overflow-hidden py-6 rounded-3xl bg-emerald-600 font-black text-2xl chinese-font shadow-[0_10px_40px_-10px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95 transition-all">
           <span className="relative z-10">开 设 牌 局</span>
           <div className="absolute inset-0 bg-gradient-to-tr from-emerald-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
         </button>
@@ -510,7 +547,7 @@ const App: React.FC = () => {
                 <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">我的房号</span>
                 <span className="text-emerald-400 font-mono font-bold">{myId}</span>
               </div>
-              <button onClick={handleShareRoom} className="p-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-xl transition-all">
+              <button onClick={handleShareRoom} className="p-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-xl transition-all flex items-center gap-1">
                 📋 分享
               </button>
             </div>
@@ -803,10 +840,12 @@ const App: React.FC = () => {
                 <div className="text-3xl mb-4">⚖️</div>
                 <h3 className="text-xl font-black text-emerald-500 chinese-font mb-2">“扣了”博弈中</h3>
                 {(() => {
-                  const respondents = getNextRespondents(gameState.kouLeInitiator!);
+                  const initiator = gameState.kouLeInitiator;
+                  const respondents = getNextRespondents(initiator!);
                   const currentDecider = respondents.find(id => gameState.kouLeResponses[id] === null);
-                  const initiatorName = gameState.kouLeInitiator === PlayerId.PLAYER ? '您' : slots[gameState.kouLeInitiator!].name;
-                  const deciderName = currentDecider === PlayerId.PLAYER ? '我' : slots[currentDecider!].name;
+                  const initiatorName = initiator === PlayerId.PLAYER ? '您' : slots[initiator!].name;
+                  const deciderName = currentDecider === PlayerId.PLAYER ? '我' : (currentDecider ? slots[currentDecider].name : '...');
+                  
                   return (
                     <>
                       <p className="text-sm text-slate-400 mb-6">{initiatorName} 发起博弈，当前 {deciderName} 表态...</p>
