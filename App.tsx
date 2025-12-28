@@ -106,6 +106,7 @@ const App: React.FC = () => {
   const connectionsRef = useRef<Record<string, any>>({});
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
+  const updatedCoinsForRound = useRef<boolean>(false);
 
   const playerHandSorted = useMemo(() => {
     return [...gameState.hands[PlayerId.PLAYER]].sort((a, b) => a.strength - b.strength);
@@ -206,16 +207,32 @@ const App: React.FC = () => {
     return results;
   }, [gameState.collected, gameState.kouLeInitiator, gameState.challengers, gameState.aiNames, gameState.multipliers, gameState.grabMultiplier]);
 
+  // 更新星光币并在结算时播放声音
   useEffect(() => {
     if (gameState.phase === GamePhase.SETTLEMENT) {
+      if (isHost && !updatedCoinsForRound.current) {
+        setGameState(prev => {
+          const newCoins = { ...prev.starCoins };
+          settlementData.forEach(res => {
+            newCoins[res.id as PlayerId] += res.netGain;
+          });
+          const newState = { ...prev, starCoins: newCoins };
+          broadcast('SYNC_STATE', newState);
+          return newState;
+        });
+        updatedCoinsForRound.current = true;
+      }
+
       const myRes = settlementData.find(r => r.id === PlayerId.PLAYER);
       if (myRes) {
         if (myRes.netGain > 0) SoundEngine.play('victory');
         else if (myRes.netGain < 0) SoundEngine.play('defeat');
         else SoundEngine.play('settle');
       }
+    } else {
+      updatedCoinsForRound.current = false;
     }
-  }, [gameState.phase, settlementData]);
+  }, [gameState.phase, settlementData, isHost, broadcast]);
 
   const initGame = useCallback((preservedStarter?: PlayerId) => {
     if (!isHost) return;
@@ -367,7 +384,6 @@ const App: React.FC = () => {
       if (isLastRespondent) {
         const allAgreed = respondents.every(id => newResponses[id] === 'agree');
         if (allAgreed) {
-          // 修改逻辑：检查是否已有胜者
           const anyWinner = Object.values(prev.collected).some(cards => cards.length >= 9);
           if (anyWinner) {
             logs.unshift('🔄 全员同意“扣了”，已有玩家达标，直接进入结算。');
@@ -481,7 +497,6 @@ const App: React.FC = () => {
       if (!initiator) return;
 
       const respondents = getNextRespondents(initiator);
-      // AI 仅在轮到自己表态时思考
       const currentDecider = respondents.find(id => gameState.kouLeResponses[id] === null);
 
       if (currentDecider && slots[currentDecider].type === 'ai') {
@@ -763,6 +778,9 @@ const App: React.FC = () => {
                    </div>
                    <div className="text-center">
                       <div className="text-xs font-black text-slate-300 chinese-font">{slots[id].name}</div>
+                      <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-yellow-500 mt-1">
+                        🪙 {gameState.starCoins[id]}
+                      </div>
                       {isHost && id !== PlayerId.PLAYER && slots[id].type !== 'human' && (
                         <button onClick={() => setSlots(prev => { 
                           const n = {...prev}; 
@@ -829,6 +847,9 @@ const App: React.FC = () => {
             <div key={id} className={`absolute top-6 ${id === PlayerId.AI_LEFT ? 'left-6' : 'right-6'} flex flex-col items-center gap-2 z-30`}>
               <div className="relative">
                 <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl border-2 bg-slate-900 flex items-center justify-center text-2xl md:text-3xl shadow-2xl transition-all duration-500 ${gameState.turn === id && gameState.phase === GamePhase.PLAYING ? 'border-emerald-500 ring-4 ring-emerald-500/20 scale-110' : 'border-white/10'}`}>{slots[id].type === 'human' ? '侠' : (slots[id].type === 'ai' ? '🤖' : '👴')}</div>
+                <div className="absolute -top-2 -left-2 bg-slate-900/80 border border-yellow-500/50 rounded-full px-1.5 py-0.5 flex items-center gap-0.5 shadow-lg">
+                  <span className="text-[8px] font-black text-yellow-400">🪙 {gameState.starCoins[id]}</span>
+                </div>
                 {(gameState.challengers[id] || 0) > 0 && (<div className="absolute -top-3 -right-3 bg-orange-600 border-2 border-white text-white font-black text-[10px] w-9 h-9 flex items-center justify-center rounded-full shadow-lg animate-bounce">宣x{gameState.challengers[id]}</div>)}
                 {gameState.multipliers[id] > 1 && (<div className="absolute -bottom-1 -right-1 bg-yellow-500 text-black font-black text-[8px] px-1 rounded-md shadow-sm border border-slate-900">x{gameState.multipliers[id]}</div>)}
                 {gameState.grabber === id && (<div className="absolute top-[-8px] left-1/2 -translate-x-1/2 bg-red-600 text-white text-[8px] px-1.5 py-0.5 rounded-md font-black shadow-lg animate-pulse whitespace-nowrap">抢收牌</div>)}
