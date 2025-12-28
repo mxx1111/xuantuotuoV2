@@ -19,7 +19,7 @@ declare var Peer: any;
 const SoundEngine = {
   ctx: null as AudioContext | null,
   init() {
-    if (!this.ctx) this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!this.ctx) this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)());
     if (this.ctx.state === 'suspended') this.ctx.resume();
   },
   play(type: 'deal' | 'play' | 'win' | 'settle' | 'victory' | 'defeat' | 'shuffle') {
@@ -69,7 +69,7 @@ const INITIAL_GAME_STATE = (starCoins?: Record<PlayerId, number>): GameState => 
   starter: PlayerId.PLAYER,
   starCoins: starCoins || { [PlayerId.PLAYER]: INITIAL_STAR_COINS, [PlayerId.AI_LEFT]: INITIAL_STAR_COINS, [PlayerId.AI_RIGHT]: INITIAL_STAR_COINS },
   kouLeInitiator: null,
-  challengers: [],
+  challengers: { [PlayerId.PLAYER]: 0, [PlayerId.AI_LEFT]: 0, [PlayerId.AI_RIGHT]: 0 },
   kouLeResponses: { [PlayerId.PLAYER]: null, [PlayerId.AI_LEFT]: null, [PlayerId.AI_RIGHT]: null },
   logs: ['系统: 宣坨坨联机大厅已就绪。'],
   aiNames: { [PlayerId.AI_LEFT]: 'AI 左', [PlayerId.AI_RIGHT]: 'AI 右' },
@@ -112,7 +112,7 @@ const App: React.FC = () => {
     });
     const winners = stats.filter(s => s.coins > 0);
     const losers = stats.filter(s => s.coins === 0);
-    const results = stats.map(s => ({ ...s, netGain: 0, isChallengerFailed: false }));
+    const results = stats.map(s => ({ ...s, netGain: 0, multiplier: 0 }));
 
     results.forEach(res => {
       const currentStat = stats.find(s => s.id === res.id)!;
@@ -120,18 +120,22 @@ const App: React.FC = () => {
       else res.netGain = -(winners.reduce((sum, w) => sum + w.coins, 0));
     });
 
-    if (gameState.kouLeInitiator && gameState.challengers.length > 0) {
+    // 扣了风险支付逻辑 (支持倍数)
+    if (gameState.kouLeInitiator) {
       const initiatorStat = stats.find(s => s.id === gameState.kouLeInitiator)!;
       const initiatorRes = results.find(r => r.id === gameState.kouLeInitiator)!;
+      
       if (initiatorStat.coins > 0) {
-        gameState.challengers.forEach(chalId => {
-          const chalStat = stats.find(s => s.id === chalId)!;
-          const chalRes = results.find(r => r.id === chalId)!;
-          if (chalStat.coins === 0) {
-            const riskAmount = initiatorStat.coins * 2;
-            chalRes.netGain -= riskAmount;
-            chalRes.isChallengerFailed = true;
-            initiatorRes.netGain += riskAmount;
+        Object.entries(gameState.challengers).forEach(([chalId, chalCount]) => {
+          if (chalCount > 0) {
+            const chalStat = stats.find(s => s.id === chalId)!;
+            const chalRes = results.find(r => r.id === chalId)!;
+            if (chalStat.coins === 0) {
+              const riskAmount = initiatorStat.coins * 2 * chalCount; // 倍数累加
+              chalRes.netGain -= riskAmount;
+              chalRes.multiplier = chalCount * 2;
+              initiatorRes.netGain += riskAmount;
+            }
           }
         });
       }
@@ -192,7 +196,8 @@ const App: React.FC = () => {
           ...prev, phase: GamePhase.PLAYING, hands,
           collected: { [PlayerId.PLAYER]: [], [PlayerId.AI_LEFT]: [], [PlayerId.AI_RIGHT]: [] },
           table: [], turn: starter, starter: starter, roundHistory: [],
-          kouLeInitiator: null, challengers: [],
+          kouLeInitiator: null, 
+          challengers: { [PlayerId.PLAYER]: 0, [PlayerId.AI_LEFT]: 0, [PlayerId.AI_RIGHT]: 0 },
           kouLeResponses: { [PlayerId.PLAYER]: null, [PlayerId.AI_LEFT]: null, [PlayerId.AI_RIGHT]: null },
           logs: [`🎴 发牌完成！${starter === PlayerId.PLAYER ? '您' : prev.aiNames[starter]} 先出牌。`, ...prev.logs].slice(0, 30),
           nextStarter: null
@@ -219,12 +224,13 @@ const App: React.FC = () => {
       
       const respondents = getNextRespondents(prev.kouLeInitiator!);
       let nextPhase = GamePhase.KOU_LE_DECISION;
-      let challengers = [...prev.challengers];
+      let newChallengers = { ...prev.challengers };
 
       if (resp === 'challenge') {
-        newLogs.unshift(`🔥 宣战: 【${pName}】 选择了“宣”(应战)！另一方无需决策。`);
-        challengers = [pid];
-        nextPhase = GamePhase.PLAYING;
+        const currentCount = newChallengers[pid] + 1;
+        newLogs.unshift(`🔥 宣战: 【${pName}】 选择了“宣”(应战)！当前倍率: ${currentCount * 2}x。另一方无需决策。`);
+        newChallengers[pid] = currentCount;
+        nextPhase = GamePhase.PLAYING; // 有人宣，阶段直接结束进入对局
       } else {
         newLogs.unshift(`✓ 响应: ${pName} 选择了“扣了”`);
         // 如果是最后一个人表态完了
@@ -233,12 +239,12 @@ const App: React.FC = () => {
           nextPhase = GamePhase.SETTLEMENT;
           SoundEngine.play('settle');
         } else {
-          // 轮到下一个人表态，AI或真人
+          // 轮到下一个人表态
           newLogs.unshift(`⏳ 等待: 请 ${prev.aiNames[respondents[1]] || '您'} 做出决策...`);
         }
       }
       
-      const nextS = { ...prev, phase: nextPhase, kouLeResponses: newRes, challengers, logs: newLogs.slice(0, 30) };
+      const nextS = { ...prev, phase: nextPhase, kouLeResponses: newRes, challengers: newChallengers, logs: newLogs.slice(0, 30) };
       if (isHost) broadcast('SYNC_STATE', nextS);
       return nextS;
     });
@@ -351,7 +357,6 @@ const App: React.FC = () => {
     });
   };
 
-  // AI 决策执行逻辑
   useEffect(() => {
     if (isHost && gameState.phase === GamePhase.PLAYING && gameState.turn !== PlayerId.PLAYER) {
       const currentSlot = slots[gameState.turn];
@@ -371,11 +376,9 @@ const App: React.FC = () => {
     }
   }, [isHost, gameState.phase, gameState.turn, gameState.table, gameState.hands, gameState.collected, slots, processPlayCards]);
 
-  // “扣了”阶段 AI 顺序表态逻辑
   useEffect(() => {
     if (isHost && gameState.phase === GamePhase.KOU_LE_DECISION) {
       const respondents = getNextRespondents(gameState.kouLeInitiator!);
-      // 找到下一个应该表态的人
       const currentDecider = respondents.find(id => gameState.kouLeResponses[id] === null);
       
       if (currentDecider && slots[currentDecider].type === 'ai') {
@@ -504,8 +507,10 @@ const App: React.FC = () => {
             <div key={id} className={`absolute top-6 ${id === PlayerId.AI_LEFT ? 'left-6' : 'right-6'} flex flex-col items-center gap-2 z-30`}>
               <div className="relative">
                 <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl border-2 bg-slate-900 flex items-center justify-center text-2xl md:text-3xl shadow-2xl transition-all duration-500 ${gameState.turn === id ? 'border-emerald-500 ring-4 ring-emerald-500/20 scale-110' : 'border-white/10'}`}>{slots[id].type === 'ai' ? '🤖' : '👴'}</div>
-                {gameState.challengers.includes(id) && (
-                  <div className="absolute -top-3 -right-3 bg-orange-600 border-2 border-white text-white font-black text-[10px] w-7 h-7 flex items-center justify-center rounded-full shadow-lg animate-bounce">宣</div>
+                {(gameState.challengers[id] || 0) > 0 && (
+                  <div className="absolute -top-3 -right-3 bg-orange-600 border-2 border-white text-white font-black text-[10px] w-9 h-9 flex items-center justify-center rounded-full shadow-lg animate-bounce">
+                    宣x{gameState.challengers[id]}
+                  </div>
                 )}
               </div>
               <div className="flex flex-col items-center gap-0.5 text-center"><span className="text-[10px] md:text-[11px] font-black text-slate-300 chinese-font">{gameState.aiNames[id]} ({gameState.hands[id].length})</span><div className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[8px] md:text-[9px] font-black">已收: {gameState.collected[id].length}</div></div>
@@ -529,9 +534,9 @@ const App: React.FC = () => {
           </div>
 
           <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-[45] pointer-events-none">
-            {gameState.challengers.includes(PlayerId.PLAYER) && (
+            {(gameState.challengers[PlayerId.PLAYER] || 0) > 0 && (
                <div className="bg-orange-600/90 border border-white/20 px-4 py-1.5 rounded-full flex items-center gap-2 shadow-2xl backdrop-blur-sm pointer-events-auto animate-in zoom-in duration-300">
-                 <span className="text-white font-black chinese-font text-xs">🔥 您已应战(宣)</span>
+                 <span className="text-white font-black chinese-font text-xs">🔥 您已应战(宣 x{gameState.challengers[PlayerId.PLAYER]})</span>
                </div>
             )}
           </div>
@@ -646,7 +651,11 @@ const App: React.FC = () => {
               {settlementData.map(res => (
                 <div key={res.id} className={`flex justify-between items-center p-4 bg-white/5 rounded-2xl border transition-all ${res.netGain < 0 ? 'border-red-500/30 opacity-70' : (res.netGain > 0 ? 'border-emerald-500/50 scale-105 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'border-white/5')}`}>
                   <span className="font-black text-sm md:text-lg chinese-font">{res.id === PlayerId.PLAYER ? '您自己' : gameState.aiNames[res.id]}</span>
-                  <div className="flex flex-col items-end"><span className={`font-black px-2 md:px-3 py-0.5 md:py-1 rounded-lg text-[10px] md:text-sm ${res.coins > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>{res.level} ({res.cards}张)</span><span className={`text-xs md:text-base font-black mt-1 ${res.netGain > 0 ? 'text-yellow-500' : (res.netGain < 0 ? 'text-red-500' : 'text-slate-400')}`}>{res.netGain > 0 ? `+${res.netGain}` : res.netGain} 🪙</span>{res.isChallengerFailed && <span className="text-[8px] md:text-[10px] text-red-400 font-bold uppercase tracking-tighter">⚠️ “宣” 失败额外扣除</span>}</div>
+                  <div className="flex flex-col items-end">
+                    <span className={`font-black px-2 md:px-3 py-0.5 md:py-1 rounded-lg text-[10px] md:text-sm ${res.coins > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>{res.level} ({res.cards}张)</span>
+                    <span className={`text-xs md:text-base font-black mt-1 ${res.netGain > 0 ? 'text-yellow-500' : (res.netGain < 0 ? 'text-red-500' : 'text-slate-400')}`}>{res.netGain > 0 ? `+${res.netGain}` : res.netGain} 🪙</span>
+                    {res.multiplier > 0 && <span className="text-[8px] md:text-[10px] text-red-400 font-bold uppercase tracking-tighter">⚠️ 应战失败 ({res.multiplier}倍风险支付)</span>}
+                  </div>
                 </div>
               ))}
             </div>

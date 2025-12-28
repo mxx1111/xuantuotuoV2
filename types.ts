@@ -44,7 +44,7 @@ export interface GameState {
   starter: PlayerId;
   starCoins: Record<PlayerId, number>;
   kouLeInitiator: PlayerId | null;
-  challengers: PlayerId[]; 
+  challengers: Record<PlayerId, number>; // 修改为记录次数：{playerId: count}
   kouLeResponses: Record<PlayerId, 'agree' | 'challenge' | null>;
   logs: string[];
   aiNames: Record<string, string>;
