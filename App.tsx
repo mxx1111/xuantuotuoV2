@@ -115,7 +115,6 @@ const App: React.FC = () => {
     setGameState(prev => ({ ...prev, logs: [msg, ...prev.logs].slice(0, 30) }));
   }, []);
 
-  // 修改：返回响应者的顺时针顺序 [下家, 下下家]
   const getNextRespondents = useCallback((initiator: PlayerId) => {
     const order = [PlayerId.PLAYER, PlayerId.AI_RIGHT, PlayerId.AI_LEFT];
     const idx = order.indexOf(initiator);
@@ -343,7 +342,6 @@ const App: React.FC = () => {
     });
   }, [isHost, broadcast, slots]);
 
-  // 修改：响应逻辑顺序化，有人宣则博弈立即达成
   const processKouLeResponse = useCallback((pid: PlayerId, response: 'agree' | 'challenge') => {
     setGameState(prev => {
       const newResponses = { ...prev.kouLeResponses, [pid]: response };
@@ -358,7 +356,6 @@ const App: React.FC = () => {
       const initiator = prev.kouLeInitiator!;
       const respondents = getNextRespondents(initiator);
 
-      // 如果有人选择挑战（宣），博弈立即达成，结束决策阶段
       if (response === 'challenge') {
         logs.unshift('⚔️ 有人选择“宣”，博弈达成，游戏继续！');
         const nextS = { ...prev, kouLeResponses: newResponses, challengers: newChallengers, logs: logs.slice(0, 30), phase: GamePhase.PLAYING };
@@ -366,20 +363,27 @@ const App: React.FC = () => {
         return nextS;
       }
 
-      // 如果是同意，检查是否是最后一个响应者
       const isLastRespondent = respondents[respondents.length - 1] === pid;
       if (isLastRespondent) {
         const allAgreed = respondents.every(id => newResponses[id] === 'agree');
         if (allAgreed) {
-          logs.unshift('🔄 全员同意“扣了”，本局作废，重新发牌。');
-          setTimeout(() => initGame(prev.starter), 1500);
-          const nextS = { ...prev, kouLeResponses: newResponses, logs: logs.slice(0, 30), phase: GamePhase.DEALING };
-          if (isHost) broadcast('SYNC_STATE', nextS);
-          return nextS;
+          // 修改逻辑：检查是否已有胜者
+          const anyWinner = Object.values(prev.collected).some(cards => cards.length >= 9);
+          if (anyWinner) {
+            logs.unshift('🔄 全员同意“扣了”，已有玩家达标，直接进入结算。');
+            const nextS = { ...prev, kouLeResponses: newResponses, logs: logs.slice(0, 30), phase: GamePhase.SETTLEMENT };
+            if (isHost) broadcast('SYNC_STATE', nextS);
+            return nextS;
+          } else {
+            logs.unshift('🔄 全员同意“扣了”，且无人达标，重新发牌。');
+            setTimeout(() => initGame(prev.starter), 1500);
+            const nextS = { ...prev, kouLeResponses: newResponses, logs: logs.slice(0, 30), phase: GamePhase.DEALING };
+            if (isHost) broadcast('SYNC_STATE', nextS);
+            return nextS;
+          }
         }
       }
 
-      // 否则，等待下一个人的响应
       const nextS = { ...prev, kouLeResponses: newResponses, challengers: newChallengers, logs: logs.slice(0, 30) };
       if (isHost) broadcast('SYNC_STATE', nextS);
       return nextS;
@@ -530,7 +534,7 @@ const App: React.FC = () => {
         <p className="text-slate-500 uppercase tracking-[0.3em] text-xs font-bold">Traditional Shanxi Strategy Game</p>
       </div>
       
-      <div className="flex flex-col gap-5 w-full max-w-sm animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
+      <div className="flex flex-col gap-5 w-full max-sm animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
         <button onClick={() => { SoundEngine.init(); setIsHost(true); setGameState(prev => ({...prev, phase: GamePhase.WAITING})); }} className="group relative overflow-hidden py-6 rounded-3xl bg-emerald-600 font-black text-2xl chinese-font shadow-[0_10px_40px_-10px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95 transition-all">
           <span className="relative z-10">开 设 牌 局</span>
           <div className="absolute inset-0 bg-gradient-to-tr from-emerald-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
