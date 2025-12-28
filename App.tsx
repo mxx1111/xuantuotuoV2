@@ -847,14 +847,37 @@ const App: React.FC = () => {
             <div key={id} className={`absolute top-6 ${id === PlayerId.AI_LEFT ? 'left-6' : 'right-6'} flex flex-col items-center gap-2 z-30`}>
               <div className="relative">
                 <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl border-2 bg-slate-900 flex items-center justify-center text-2xl md:text-3xl shadow-2xl transition-all duration-500 ${gameState.turn === id && gameState.phase === GamePhase.PLAYING ? 'border-emerald-500 ring-4 ring-emerald-500/20 scale-110' : 'border-white/10'}`}>{slots[id].type === 'human' ? '侠' : (slots[id].type === 'ai' ? '🤖' : '👴')}</div>
-                <div className="absolute -top-2 -left-2 bg-slate-900/80 border border-yellow-500/50 rounded-full px-1.5 py-0.5 flex items-center gap-0.5 shadow-lg">
+                
+                {/* 星光币 - 左上角 */}
+                <div className="absolute -top-3 -left-3 bg-slate-950/80 border border-yellow-500/50 rounded-full px-1.5 py-0.5 flex items-center gap-0.5 shadow-lg z-20">
                   <span className="text-[8px] font-black text-yellow-400">🪙 {gameState.starCoins[id]}</span>
                 </div>
-                {(gameState.challengers[id] || 0) > 0 && (<div className="absolute -top-3 -right-3 bg-orange-600 border-2 border-white text-white font-black text-[10px] w-9 h-9 flex items-center justify-center rounded-full shadow-lg animate-bounce">宣x{gameState.challengers[id]}</div>)}
-                {gameState.multipliers[id] > 1 && (<div className="absolute -bottom-1 -right-1 bg-yellow-500 text-black font-black text-[8px] px-1 rounded-md shadow-sm border border-slate-900">x{gameState.multipliers[id]}</div>)}
-                {gameState.grabber === id && (<div className="absolute top-[-8px] left-1/2 -translate-x-1/2 bg-red-600 text-white text-[8px] px-1.5 py-0.5 rounded-md font-black shadow-lg animate-pulse whitespace-nowrap">抢收牌</div>)}
+                
+                {/* 宣状态 - 右上角 */}
+                {(gameState.challengers[id] || 0) > 0 && (
+                  <div className="absolute -top-4 -right-4 bg-orange-600 border-2 border-white text-white font-black text-[10px] w-9 h-9 flex items-center justify-center rounded-full shadow-lg animate-bounce z-30">
+                    宣x{gameState.challengers[id]}
+                  </div>
+                )}
+                
+                {/* 个人倍率 - 右下角 */}
+                {gameState.multipliers[id] > 1 && (
+                  <div className="absolute -bottom-2 -right-2 bg-yellow-500 text-black font-black text-[10px] px-1.5 py-0.5 rounded-md shadow-sm border border-slate-900 z-20">
+                    x{gameState.multipliers[id]}
+                  </div>
+                )}
+                
+                {/* 抢收牌状态 - 左下角 */}
+                {gameState.grabber === id && (
+                  <div className="absolute -bottom-2 -left-2 bg-red-600 text-white text-[8px] px-1.5 py-0.5 rounded-md font-black shadow-lg animate-pulse whitespace-nowrap z-20 border border-white/20">
+                    抢收
+                  </div>
+                )}
               </div>
-              <div className="flex flex-col items-center gap-0.5 text-center"><span className="text-[10px] md:text-[11px] font-black text-slate-300 chinese-font">{slots[id].name} ({gameState.hands[id].length})</span><div className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[8px] md:text-[9px] font-black">已收: {gameState.collected[id].length}</div></div>
+              <div className="flex flex-col items-center gap-0.5 text-center">
+                <span className="text-[10px] md:text-[11px] font-black text-slate-300 chinese-font">{slots[id].name} ({gameState.hands[id].length})</span>
+                <div className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[8px] md:text-[9px] font-black">已收: {gameState.collected[id].length}</div>
+              </div>
             </div>
           ))}
           <div className="flex items-center justify-center gap-8 md:gap-24 z-20 w-full max-w-5xl px-10 scale-90 md:scale-100">{renderTableSlot(PlayerId.AI_LEFT)}{renderTableSlot(PlayerId.PLAYER)}{renderTableSlot(PlayerId.AI_RIGHT)}</div>
