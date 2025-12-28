@@ -413,7 +413,6 @@ const App: React.FC = () => {
     const myHand = gameState.hands[PlayerId.PLAYER];
     const collectedCount = gameState.collected[PlayerId.PLAYER].length;
     
-    // 使用现有的 AI 决策逻辑作为玩家提示
     const recommended = aiDecidePlay(myHand, targetPlay, currentMaxStr, collectedCount);
     setSelectedCards(recommended);
   };
@@ -670,17 +669,50 @@ const App: React.FC = () => {
            </div>
         </div>
       </div>
-      <div className="w-20 md:w-28 landscape:h-screen bg-slate-900 border-l border-white/10 flex flex-col items-center justify-center p-4 gap-4 md:gap-4 z-[100]">
-        <button onClick={() => handleAction(false)} disabled={selectedCards.length === 0 || gameState.turn !== PlayerId.PLAYER} className={`w-full py-4 md:py-7 rounded-xl md:rounded-2xl font-black chinese-font transition-all text-base md:text-xl border border-white/5 ${selectedCards.length > 0 && gameState.turn === PlayerId.PLAYER ? 'bg-emerald-600 hover:bg-emerald-500 active:scale-90 shadow-[0_0_20px_rgba(16,185,129,0.2)]' : 'bg-slate-800 text-slate-600 opacity-30 cursor-not-allowed'}`}>{gameState.table.length === 0 ? '出' : '跟'}<br/>{gameState.table.length === 0 ? '牌' : '进'}</button>
-        <button onClick={() => handleAction(true)} disabled={selectedCards.length === 0 || gameState.turn !== PlayerId.PLAYER || !gameState.table.length} className={`w-full py-4 md:py-7 rounded-xl md:rounded-2xl font-black chinese-font transition-all text-base md:text-xl border border-white/5 ${selectedCards.length > 0 && gameState.turn === PlayerId.PLAYER ? 'bg-orange-700 hover:bg-orange-600 active:scale-90' : 'bg-slate-800 text-slate-600 opacity-30 cursor-not-allowed'}`}>扣<br/>牌</button>
+      
+      {/* 优化后的极简操作栏 */}
+      <div className="w-16 md:w-24 landscape:h-screen bg-slate-900/90 border-l border-white/10 flex flex-col items-center justify-center p-3 gap-5 md:gap-7 z-[100] backdrop-blur-lg shadow-2xl">
+        <button 
+          onClick={() => handleAction(false)} 
+          disabled={selectedCards.length === 0 || gameState.turn !== PlayerId.PLAYER} 
+          className={`w-12 h-12 md:w-16 md:h-16 flex items-center justify-center rounded-2xl font-black chinese-font transition-all text-xl md:text-3xl border border-white/10 ${selectedCards.length > 0 && gameState.turn === PlayerId.PLAYER ? 'bg-emerald-600 hover:bg-emerald-500 active:scale-90 shadow-[0_0_25px_rgba(16,185,129,0.3)] text-white' : 'bg-slate-800/50 text-slate-700 opacity-40 cursor-not-allowed'}`}
+        >
+          {gameState.table.length === 0 ? '出' : '跟'}
+        </button>
+
+        <button 
+          onClick={() => handleAction(true)} 
+          disabled={selectedCards.length === 0 || gameState.turn !== PlayerId.PLAYER || !gameState.table.length} 
+          className={`w-12 h-12 md:w-16 md:h-16 flex items-center justify-center rounded-2xl font-black chinese-font transition-all text-xl md:text-3xl border border-white/10 ${selectedCards.length > 0 && gameState.turn === PlayerId.PLAYER ? 'bg-orange-700 hover:bg-orange-600 active:scale-90 shadow-[0_0_25px_rgba(194,65,12,0.3)] text-white' : 'bg-slate-800/50 text-slate-700 opacity-40 cursor-not-allowed'}`}
+        >
+          扣
+        </button>
         
-        <div className="h-px w-full bg-white/5"></div>
+        <div className="h-px w-8 bg-white/10"></div>
         
-        <button onClick={handleHint} disabled={gameState.phase !== GamePhase.PLAYING || gameState.turn !== PlayerId.PLAYER} className={`w-full py-4 md:py-7 rounded-xl md:rounded-2xl font-black chinese-font transition-all text-base md:text-xl border border-white/5 ${gameState.turn === PlayerId.PLAYER ? 'bg-blue-600 hover:bg-blue-500 active:scale-90 text-white' : 'bg-slate-800 text-slate-600 opacity-30 cursor-not-allowed'}`}>提<br/>示</button>
+        <button 
+          onClick={handleHint} 
+          disabled={gameState.phase !== GamePhase.PLAYING || gameState.turn !== PlayerId.PLAYER} 
+          className={`w-12 h-12 md:w-16 md:h-16 flex items-center justify-center rounded-2xl font-black chinese-font transition-all text-xl md:text-3xl border border-white/10 ${gameState.turn === PlayerId.PLAYER ? 'bg-indigo-600 hover:bg-indigo-500 active:scale-90 shadow-[0_0_25px_rgba(79,70,229,0.3)] text-white' : 'bg-slate-800/50 text-slate-700 opacity-40 cursor-not-allowed'}`}
+        >
+          提
+        </button>
         
-        <button onClick={() => setSelectedCards([])} className="w-full py-2 bg-slate-800 rounded-xl text-[10px] md:text-xs font-black text-slate-400 active:scale-90 transition-all">清 空</button>
-        <button onClick={() => setShowHistory(true)} className="w-full py-3 md:py-5 bg-slate-800 rounded-xl md:rounded-2xl border border-white/5 font-black text-xs md:text-sm chinese-font hover:bg-slate-700 transition-all active:scale-90">对 局<br/>记 录</button>
+        <button 
+          onClick={() => setSelectedCards([])} 
+          className="w-10 h-10 md:w-14 md:h-14 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-xl text-lg md:text-xl font-black text-slate-400 active:scale-90 transition-all border border-white/5"
+        >
+          清
+        </button>
+
+        <button 
+          onClick={() => setShowHistory(true)} 
+          className="w-10 h-10 md:w-14 md:h-14 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-xl border border-white/5 font-black text-lg md:text-xl chinese-font transition-all active:scale-90 text-slate-300"
+        >
+          录
+        </button>
       </div>
+
       {gameState.phase === GamePhase.SETTLEMENT && (
         <div className="absolute inset-0 z-[300] bg-slate-950/98 flex items-center justify-center p-4 backdrop-blur-3xl animate-in zoom-in overflow-hidden">
           <div className="max-w-md w-full max-h-[90vh] flex flex-col bg-slate-900 border border-emerald-500/40 p-5 md:p-10 rounded-[30px] md:rounded-[40px] shadow-2xl text-center overflow-hidden">
