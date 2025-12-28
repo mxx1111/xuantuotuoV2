@@ -84,6 +84,7 @@ const App: React.FC = () => {
   const [isHost, setIsHost] = useState<boolean>(false);
   const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState<boolean>(false);
+  const [showRules, setShowRules] = useState<boolean>(false);
   
   const [slots, setSlots] = useState<Record<PlayerId, SlotInfo>>({
     [PlayerId.PLAYER]: { type: 'human', name: '我' },
@@ -436,11 +437,116 @@ const App: React.FC = () => {
   };
 
   const renderLobby = () => (
-    <div className="absolute inset-0 z-[500] bg-slate-950/90 backdrop-blur-3xl flex flex-col items-center justify-center p-6">
-      <div className="max-w-xl w-full space-y-8 text-center bg-slate-900/40 p-10 rounded-[4rem] border border-white/5 shadow-2xl">
-        <div className="space-y-2"><h1 className="text-5xl font-black chinese-font text-emerald-500 tracking-tighter">宣坨坨</h1><p className="text-slate-500 text-[10px] tracking-[0.5em] uppercase">山西柳林传统扑克</p></div>
-        <div className="flex flex-col items-center gap-2"><span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">您的联机 ID</span><div className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-2xl border border-white/5"><span className="text-xs font-mono text-emerald-400">{myId || '获取 ID 中...'}</span><button onClick={() => {if(myId){navigator.clipboard.writeText(myId); addLog("ID已复制");}}} className="text-[10px] bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded-md hover:bg-emerald-500/20 transition-all">复制</button></div></div>
-        <div className="grid grid-cols-2 gap-6 w-full"><div className="space-y-4"><input value={targetId} onChange={e => setTargetId(e.target.value)} placeholder="输入房号加入..." className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-6 py-4 text-center focus:ring-2 ring-emerald-500 transition-all text-sm" /><button onClick={joinRoom} disabled={!targetId} className="w-full py-4 bg-slate-100 text-slate-900 font-black rounded-2xl hover:bg-white transition-all active:scale-95 disabled:opacity-20 shadow-xl">加入对局</button></div><div className="flex flex-col justify-center"><button onClick={() => {setIsHost(true); setGameState(prev => ({...prev, phase: GamePhase.WAITING}));}} className="w-full h-full py-4 bg-emerald-600 font-black rounded-2xl hover:bg-emerald-500 transition-all active:scale-95 shadow-lg shadow-emerald-900/20">创建新对局</button></div></div>
+    <div className="absolute inset-0 z-[500] bg-slate-950/90 backdrop-blur-3xl flex flex-col items-center justify-center p-4">
+      <div className="max-w-xl w-full max-h-[95vh] overflow-y-auto space-y-4 md:space-y-8 text-center bg-slate-900/40 p-6 md:p-10 rounded-[3rem] md:rounded-[4rem] border border-white/5 shadow-2xl relative group custom-scrollbar">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent"></div>
+        <div className="space-y-1 md:space-y-2">
+          <h1 className="text-4xl md:text-6xl font-black chinese-font text-emerald-500 tracking-tighter">宣坨坨</h1>
+          <p className="text-slate-500 text-[8px] md:text-[10px] tracking-[0.5em] uppercase">山西柳林传统扑克</p>
+        </div>
+        
+        <div className="flex flex-col items-center gap-1 md:gap-2">
+          <span className="text-[8px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest">您的联机 ID</span>
+          <div className="flex items-center gap-2 bg-black/40 px-3 md:px-4 py-1.5 md:py-2 rounded-2xl border border-white/5">
+            <span className="text-[10px] md:text-xs font-mono text-emerald-400 truncate max-w-[150px] md:max-w-none">{myId || '获取 ID 中...'}</span>
+            <button onClick={() => {if(myId){navigator.clipboard.writeText(myId); addLog("ID已复制");}}} className="text-[8px] md:text-[10px] bg-emerald-500/10 text-emerald-500 px-1.5 md:px-2 py-0.5 md:py-1 rounded-md hover:bg-emerald-500/20 transition-all">复制</button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 w-full">
+          <div className="space-y-3 md:space-y-4">
+            <input value={targetId} onChange={e => setTargetId(e.target.value)} placeholder="输入房号加入..." className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-6 py-3 md:py-4 text-center focus:ring-2 ring-emerald-500 transition-all text-xs md:text-sm outline-none" />
+            <button onClick={joinRoom} disabled={!targetId} className="w-full py-3 md:py-4 bg-slate-100 text-slate-900 font-black rounded-2xl hover:bg-white transition-all active:scale-95 disabled:opacity-20 shadow-xl text-xs md:text-sm">加入对局</button>
+          </div>
+          <div className="flex flex-col gap-3 md:gap-4">
+            <button onClick={() => {setIsHost(true); setGameState(prev => ({...prev, phase: GamePhase.WAITING}));}} className="w-full py-3 md:py-4 bg-emerald-600 font-black rounded-2xl hover:bg-emerald-500 transition-all active:scale-95 shadow-lg shadow-emerald-900/20 text-xs md:text-sm">创建新对局</button>
+            <button onClick={() => setShowRules(true)} className="w-full py-3 md:py-4 bg-slate-800 border border-white/5 text-slate-300 font-black rounded-2xl hover:bg-slate-700 transition-all active:scale-95 flex items-center justify-center gap-2 text-xs md:text-sm">📖 玩法教程</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderRulesModal = () => (
+    <div className="absolute inset-0 z-[1000] bg-slate-950/95 backdrop-blur-2xl flex flex-col p-4 md:p-12 animate-in fade-in duration-300">
+      <div className="max-w-4xl w-full mx-auto flex flex-col h-full bg-slate-900/50 rounded-[2rem] md:rounded-[3rem] border border-white/5 shadow-2xl overflow-hidden relative">
+        <div className="p-4 md:p-12 flex justify-between items-center shrink-0 bg-slate-900/80 border-b border-white/5">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-10 h-10 md:w-12 h-12 bg-emerald-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-xl md:text-2xl">📖</div>
+            <div>
+              <h2 className="text-xl md:text-3xl font-black chinese-font text-emerald-500">宣坨坨游戏规则</h2>
+              <p className="text-[8px] md:text-[10px] text-slate-500 uppercase tracking-widest mt-0.5 md:mt-1">24张牌体系</p>
+            </div>
+          </div>
+          <button onClick={() => setShowRules(false)} className="w-10 h-10 md:w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-lg md:text-xl hover:bg-emerald-600 transition-all">✕</button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 md:p-12 space-y-8 md:space-y-12 custom-scrollbar">
+          <section className="space-y-3 md:space-y-4">
+            <h3 className="text-lg md:text-xl font-black chinese-font text-emerald-400 flex items-center gap-2 border-l-4 border-emerald-500 pl-4">一、牌力排序</h3>
+            <div className="bg-black/40 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-white/5 leading-loose">
+              <p className="text-xs md:text-base text-slate-300">
+                <strong className="text-white">单牌:</strong> 红尔(24) > 黑尔(23) > 红相(22) > 黑相(21) > 红马(20) > 黑马(19) > 红卒(18) > 黑卒(17) > 大王(16) > 红曲(15) > 小王(14) > 黑曲(13)
+              </p>
+              <p className="text-xs md:text-base text-slate-300 mt-2">
+                <strong className="text-white">对子:</strong> 基础对子牌力 = 单牌 + 100；<span className="text-orange-400 font-bold">大小王对 & 红尔对 特殊牌力 = 125(不分胜负)</span>。
+              </p>
+              <p className="text-xs md:text-base text-slate-300 mt-2">
+                <strong className="text-white">三张:</strong> 牌力 = 最大单牌 + 200。仅同色三张曲(JQK)可组合。
+              </p>
+            </div>
+          </section>
+
+          <section className="space-y-3 md:space-y-4">
+            <h3 className="text-lg md:text-xl font-black chinese-font text-emerald-400 flex items-center gap-2 border-l-4 border-emerald-500 pl-4">二、核心规则</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              <div className="bg-slate-800/50 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
+                <h4 className="font-black text-white mb-2 text-sm md:text-base">出牌规则</h4>
+                <p className="text-xs md:text-sm text-slate-400">数量必须相同，牌型必须一致（单打单，对打对）。如果有能打过的牌，<span className="text-emerald-400">必须出牌，禁止扣牌</span>。</p>
+              </div>
+              <div className="bg-slate-800/50 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
+                <h4 className="font-black text-white mb-2 text-sm md:text-base">扣牌机制</h4>
+                <p className="text-xs md:text-sm text-slate-400">无法压制或选择不出时必须扣牌，扣除数量与首发相同。扣除的牌由本轮赢家收集。</p>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-3 md:space-y-4">
+            <h3 className="text-lg md:text-xl font-black chinese-font text-emerald-400 flex items-center gap-2 border-l-4 border-emerald-500 pl-4">三、特殊博弈: 扣了与宣</h3>
+            <div className="bg-orange-500/5 p-4 md:p-8 rounded-2xl md:rounded-3xl border border-orange-500/20">
+              <p className="text-xs md:text-base text-slate-300 italic">发起者认为自己必赢，选择发起“扣了”。</p>
+              <ul className="mt-4 space-y-2 md:space-y-3 text-xs md:text-sm text-slate-400">
+                <li className="flex gap-2"><span>•</span> <span><strong>扣了:</strong> 同意重发。若两名对手均同意，则本局作废重新洗牌。</span></li>
+                <li className="flex gap-2"><span>•</span> <span><strong>宣 (挑战):</strong> 接受对局。若应战者最终输掉（收牌不足9张），需向发起者支付<span className="text-orange-500 font-bold">双倍倍率</span>的额外星光币。</span></li>
+              </ul>
+            </div>
+          </section>
+
+          <section className="space-y-3 md:space-y-4 pb-4">
+            <h3 className="text-lg md:text-xl font-black chinese-font text-emerald-400 flex items-center gap-2 border-l-4 border-emerald-500 pl-4">四、结算与等级</h3>
+            <div className="overflow-hidden border border-white/5 rounded-2xl md:rounded-3xl">
+              <table className="w-full text-xs md:text-sm text-left">
+                <thead className="bg-slate-800/80 text-slate-400">
+                  <tr>
+                    <th className="px-4 md:px-6 py-3 md:py-4">等级</th>
+                    <th className="px-4 md:px-6 py-3 md:py-4">收牌数</th>
+                    <th className="px-4 md:px-6 py-3 md:py-4">奖励币</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 bg-black/20">
+                  <tr><td className="px-4 md:px-6 py-3 md:py-4 font-black">不够</td><td className="px-4 md:px-6 py-3 md:py-4 text-slate-500">0-8张</td><td className="px-4 md:px-6 py-3 md:py-4">0 (赔付)</td></tr>
+                  <tr><td className="px-4 md:px-6 py-3 md:py-4 font-black text-emerald-500">刚够</td><td className="px-4 md:px-6 py-3 md:py-4">9-14张</td><td className="px-4 md:px-6 py-3 md:py-4">+1</td></tr>
+                  <tr><td className="px-4 md:px-6 py-3 md:py-4 font-black text-emerald-500">五了</td><td className="px-4 md:px-6 py-3 md:py-4">15-17张</td><td className="px-4 md:px-6 py-3 md:py-4">+2</td></tr>
+                  <tr><td className="px-4 md:px-6 py-3 md:py-4 font-black text-emerald-500">此了</td><td className="px-4 md:px-6 py-3 md:py-4">18-24张</td><td className="px-4 md:px-6 py-3 md:py-4">+3</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        
+        <div className="p-4 md:p-12 bg-slate-900/80 border-t border-white/5 flex justify-center shrink-0">
+          <button onClick={() => setShowRules(false)} className="px-8 md:px-12 py-3 md:py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl md:rounded-2xl transition-all shadow-xl active:scale-95 text-xs md:text-base">我明白了</button>
+        </div>
       </div>
     </div>
   );
@@ -465,6 +571,7 @@ const App: React.FC = () => {
     <div className="h-screen w-full flex flex-col bg-slate-950 text-slate-100 overflow-hidden relative landscape:flex-row">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-900/10 via-slate-950 to-slate-950 pointer-events-none"></div>
       {gameState.phase === GamePhase.LOBBY && renderLobby()}
+      {showRules && renderRulesModal()}
       {gameState.phase === GamePhase.WAITING && (
         <div className="absolute inset-0 z-[400] bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6">
           <h2 className="text-2xl font-black chinese-font text-emerald-500 mb-12">等待备战中...</h2>
@@ -596,37 +703,76 @@ const App: React.FC = () => {
           )}
 
           {showHistory && (
-            <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xl z-[200] flex flex-col p-6 animate-in slide-in-from-right duration-300">
-               <div className="flex justify-between items-center mb-6">
-                 <h2 className="text-2xl font-black chinese-font text-emerald-500">本局出牌记录</h2>
-                 <button onClick={() => setShowHistory(false)} className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-xl hover:bg-slate-700 transition-all">✕</button>
+            <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-2xl z-[200] flex flex-col p-4 md:p-8 animate-in slide-in-from-right duration-300">
+               <div className="flex justify-between items-center mb-6 shrink-0">
+                 <div className="flex items-center gap-3">
+                   <h2 className="text-2xl md:text-3xl font-black chinese-font text-emerald-500">本局出牌记录</h2>
+                   <div className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Live Record</div>
+                 </div>
+                 <button onClick={() => setShowHistory(false)} className="w-12 h-12 rounded-full bg-slate-800/80 backdrop-blur-md flex items-center justify-center text-xl hover:bg-emerald-600 hover:scale-110 transition-all shadow-2xl">✕</button>
                </div>
-               <div className="flex-1 overflow-y-auto space-y-6 pr-4 custom-scrollbar">
+               
+               <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
                  {gameState.roundHistory.length === 0 ? (
-                   <div className="h-full flex items-center justify-center text-slate-500 chinese-font">暂无对局记录...</div>
+                   <div className="h-full flex flex-col items-center justify-center text-slate-600">
+                     <div className="text-6xl mb-4 grayscale opacity-20">🎴</div>
+                     <span className="chinese-font font-black tracking-widest opacity-40">暂无对局历史，开始一局吧</span>
+                   </div>
                  ) : (
                    gameState.roundHistory.map((round, idx) => {
                      let winnerId = round[0].playerId;
                      let maxStr = round[0].strength;
                      round.forEach(p => { if (p.strength > maxStr) { maxStr = p.strength; winnerId = p.playerId; } });
+                     
                      return (
-                       <div key={idx} className="bg-slate-900/50 border border-white/5 rounded-2xl p-4">
-                         <div className="flex justify-between items-center mb-4 pb-2 border-b border-white/5">
-                            <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Round {idx + 1}</span>
-                            <span className="text-xs font-black text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded">胜者: {winnerId === PlayerId.PLAYER ? '我自己' : gameState.aiNames[winnerId]}</span>
-                         </div>
-                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {round.map((play, pIdx) => (
-                              <div key={pIdx} className={`flex flex-col gap-2 p-2 rounded-xl ${play.playerId === winnerId ? 'bg-emerald-500/5 ring-1 ring-emerald-500/20' : 'bg-black/20'}`}>
-                                <div className="flex items-center justify-between text-[10px] font-black text-slate-400">
-                                   <span>{play.playerId === PlayerId.PLAYER ? '您' : gameState.aiNames[play.playerId]}</span>
-                                   <span>{play.type === 'discard' ? '扣牌' : (play.type === 'pair' ? '对子' : (play.type === 'triple' ? '三张' : '单张'))}</span>
-                                </div>
-                                <div className="flex -space-x-8 scale-75 origin-left">
-                                  {play.cards.map(c => <PlayingCard key={c.id} card={c} isMini isBack={play.type === 'discard'} />)}
-                                </div>
+                       <div key={idx} className="bg-slate-900/40 border border-white/5 rounded-3xl p-4 md:p-6 shadow-xl relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
+                         {/* 装饰性背景 */}
+                         <div className="absolute top-0 right-0 p-10 bg-emerald-500/5 blur-3xl rounded-full -mr-10 -mt-10 pointer-events-none"></div>
+                         
+                         <div className="flex justify-between items-center mb-6 relative z-10">
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm font-black text-slate-500 chinese-font">第 {idx + 1} 轮对局</span>
+                              <div className="flex items-center gap-2 bg-emerald-500/20 px-3 py-1 rounded-full ring-1 ring-emerald-500/30">
+                                <span className="text-emerald-400 text-[10px] font-black uppercase">胜者:</span>
+                                <span className="text-white text-xs font-black chinese-font">{winnerId === PlayerId.PLAYER ? '您自己' : gameState.aiNames[winnerId]}</span>
                               </div>
-                            ))}
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-700 uppercase tracking-widest">Round Stats</div>
+                         </div>
+
+                         <div className="grid grid-cols-3 gap-3 md:gap-6 relative z-10">
+                            {[PlayerId.AI_LEFT, PlayerId.PLAYER, PlayerId.AI_RIGHT].map((pid) => {
+                              const play = round.find(r => r.playerId === pid);
+                              const isWinner = pid === winnerId;
+                              const pName = pid === PlayerId.PLAYER ? '您自己' : gameState.aiNames[pid];
+
+                              return (
+                                <div key={pid} className={`flex flex-col gap-3 p-3 md:p-4 rounded-2xl transition-all duration-500 ${isWinner ? 'bg-emerald-500/10 ring-2 ring-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-black/40 border border-white/5'}`}>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                       <span className={`text-[10px] md:text-xs font-black chinese-font ${isWinner ? 'text-emerald-400' : 'text-slate-400'}`}>{pName}</span>
+                                       {isWinner && <span className="text-[10px] bg-yellow-500 text-yellow-950 px-1.5 py-0.5 rounded-md font-black">🏆 胜</span>}
+                                    </div>
+                                    <span className={`text-[9px] font-black uppercase tracking-tighter ${play?.type === 'discard' ? 'text-red-500' : (isWinner ? 'text-emerald-400' : 'text-slate-600')}`}>
+                                      {play?.type === 'discard' ? '扣牌' : (play?.type === 'pair' ? '对子' : (play?.type === 'triple' ? '三张' : '单张'))}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex -space-x-8 md:-space-x-12 overflow-visible py-2">
+                                    {play?.cards.map((c, ci) => (
+                                      <div key={c.id} style={{ zIndex: ci }} className="hover:translate-y-[-4px] transition-transform duration-300">
+                                        <PlayingCard card={c} size="small" isBack={play.type === 'discard'} />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  
+                                  <div className="mt-auto pt-2 border-t border-white/5 flex justify-between items-center">
+                                    <span className="text-[8px] text-slate-700 font-bold uppercase">Power</span>
+                                    <span className={`text-xs font-mono font-black ${isWinner ? 'text-emerald-400' : 'text-slate-500'}`}>{play?.strength || '-'}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
                          </div>
                        </div>
                      );
@@ -699,10 +845,10 @@ const App: React.FC = () => {
         </button>
         
         <button 
-          onClick={() => setSelectedCards([])} 
+          onClick={() => setShowRules(true)} 
           className="w-10 h-10 md:w-14 md:h-14 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-xl text-lg md:text-xl font-black text-slate-400 active:scale-90 transition-all border border-white/5"
         >
-          清
+          规
         </button>
 
         <button 
