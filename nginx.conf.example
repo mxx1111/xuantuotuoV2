@@ -1,0 +1,281 @@
+# ============================================================
+# 宣坨坨游戏 V2 - Nginx 配置示例
+# ============================================================
+#
+# 使用说明：
+# 1. 根据您的实际部署路径修改配置
+# 2. 选择合适的 CSP 配置方案（方案1/2/3）
+# 3. 将配置合并到您的主 Nginx 配置文件中
+# 4. 测试配置: nginx -t
+# 5. 重新加载: nginx -s reload
+#
+# ============================================================
+
+# ============================================================
+# 方案 1: 宽松 CSP 配置（推荐用于开发/测试环境）
+# ============================================================
+# 特点：允许 inline script 和 style，允许所有 CDN 资源
+# 适用：快速解决 CSP 问题，开发测试环境
+
+location /xtt/v2/ {
+    alias /var/www/html/xauntuotuoV2/dist/;
+    index index.html;
+
+    # CSP 配置 - 宽松模式
+    add_header Content-Security-Policy "
+        default-src 'self';
+        script-src 'self' 'unsafe-inline' 'unsafe-eval'
+            https://unpkg.com
+            https://cdn.tailwindcss.com
+            https://esm.sh
+            https://fonts.googleapis.com;
+        style-src 'self' 'unsafe-inline'
+            https://fonts.googleapis.com
+            https://cdn.tailwindcss.com;
+        font-src 'self'
+            https://fonts.gstatic.com;
+        connect-src 'self'
+            wss:
+            https:;
+        img-src 'self'
+            data:
+            https:;
+    " always;
+
+    # 基本安全头
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # SPA 路由支持
+    try_files $uri $uri/ /xtt/v2/index.html;
+
+    # 静态资源缓存
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+
+
+# ============================================================
+# 方案 2: 中等 CSP 配置（推荐用于生产环境）
+# ============================================================
+# 特点：允许 inline，但限制 CDN 来源
+# 适用：平衡安全性和便利性
+
+location /xtt/v2/ {
+    alias /var/www/html/xauntuotuoV2/dist/;
+    index index.html;
+
+    # CSP 配置 - 中等安全
+    add_header Content-Security-Policy "
+        default-src 'self';
+        script-src 'self' 'unsafe-inline'
+            https://unpkg.com
+            https://cdn.tailwindcss.com
+            https://esm.sh;
+        style-src 'self' 'unsafe-inline'
+            https://fonts.googleapis.com;
+        font-src 'self'
+            https://fonts.gstatic.com;
+        connect-src 'self'
+            wss://0.peerjs.com
+            https://0.peerjs.com;
+        img-src 'self' data:;
+    " always;
+
+    # 安全头
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # SPA 路由支持
+    try_files $uri $uri/ /xtt/v2/index.html;
+
+    # 静态资源缓存
+    location ~* \.(js|css)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location ~* \.(png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+
+
+# ============================================================
+# 方案 3: 完整 Server 配置示例（包含 HTTPS）
+# ============================================================
+# 特点：完整的生产环境配置，包含 SSL、Gzip 等
+# 适用：从零开始配置服务器
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name 88688.team www.88688.team;
+
+    # HTTP 自动跳转 HTTPS（可选）
+    # return 301 https://$server_name$request_uri;
+
+    # 或者直接在 HTTP 提供服务
+    root /var/www/html;
+    index index.html;
+
+    # Gzip 压缩
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+
+    # 宣坨坨游戏 V2
+    location /xtt/v2/ {
+        alias /var/www/html/xauntuotuoV2/dist/;
+        index index.html;
+
+        # CSP 配置（使用方案1或方案2的配置）
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.tailwindcss.com https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss: https:; img-src 'self' data:;" always;
+
+        # 安全头
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+        # SPA 路由支持
+        try_files $uri $uri/ /xtt/v2/index.html;
+
+        # 静态资源缓存
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            access_log off;
+        }
+    }
+
+    # 日志配置
+    access_log /var/log/nginx/xtt_access.log;
+    error_log /var/log/nginx/xtt_error.log;
+}
+
+
+# ============================================================
+# 方案 4: 单行 CSP 配置（便于快速复制）
+# ============================================================
+# 如果您只需要修改现有配置中的 CSP 头，复制下面这一行：
+
+# add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.tailwindcss.com https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss: https:; img-src 'self' data:;" always;
+
+
+# ============================================================
+# 常见部署路径配置
+# ============================================================
+
+# 场景 1: 部署在根路径 (http://example.com/)
+location / {
+    alias /var/www/html/xauntuotuoV2/dist/;
+    index index.html;
+    # ... 其他配置同上
+}
+
+# 场景 2: 部署在子目录 (http://example.com/game/)
+location /game/ {
+    alias /var/www/html/xauntuotuoV2/dist/;
+    index index.html;
+    try_files $uri $uri/ /game/index.html;
+    # ... 其他配置同上
+}
+
+# 场景 3: 部署在二级域名 (http://game.example.com/)
+server {
+    listen 80;
+    server_name game.example.com;
+    root /var/www/html/xauntuotuoV2/dist;
+    index index.html;
+    try_files $uri $uri/ /index.html;
+    # ... 其他配置同上
+}
+
+
+# ============================================================
+# 故障排查命令
+# ============================================================
+#
+# 1. 测试配置文件语法：
+#    nginx -t
+#
+# 2. 重新加载配置：
+#    nginx -s reload
+#
+# 3. 重启 Nginx：
+#    systemctl restart nginx
+#    # 或
+#    service nginx restart
+#
+# 4. 查看错误日志：
+#    tail -f /var/log/nginx/error.log
+#
+# 5. 查看访问日志：
+#    tail -f /var/log/nginx/access.log
+#
+# 6. 检查 Nginx 进程：
+#    ps aux | grep nginx
+#
+# 7. 检查端口占用：
+#    netstat -tlnp | grep :80
+#    # 或
+#    ss -tlnp | grep :80
+#
+# ============================================================
+
+
+# ============================================================
+# CSP 调试技巧
+# ============================================================
+#
+# 1. 在浏览器开发者工具 Console 中查看 CSP 违规报告
+#
+# 2. 使用 CSP Report-Only 模式测试（不阻止，只报告）：
+#    add_header Content-Security-Policy-Report-Only "..." always;
+#
+# 3. 临时完全禁用 CSP 进行测试（仅用于调试）：
+#    # add_header Content-Security-Policy "..." always;
+#
+# 4. 查看 HTTP 响应头：
+#    curl -I https://88688.team/xtt/v2/
+#
+# 5. 在线 CSP 验证工具：
+#    https://csp-evaluator.withgoogle.com/
+#
+# ============================================================
+
+
+# ============================================================
+# 性能优化建议
+# ============================================================
+
+# 启用 HTTP/2（需要 HTTPS）
+listen 443 ssl http2;
+
+# Brotli 压缩（需要安装 nginx-module-brotli）
+# brotli on;
+# brotli_comp_level 6;
+# brotli_types text/plain text/css application/javascript application/json;
+
+# 增加上传限制（如果需要）
+client_max_body_size 10M;
+
+# 连接超时设置
+keepalive_timeout 65;
+client_body_timeout 60;
+client_header_timeout 60;
+send_timeout 60;
+
+# 文件描述符缓存
+open_file_cache max=1000 inactive=20s;
+open_file_cache_valid 30s;
+open_file_cache_min_uses 2;
+open_file_cache_errors on;
