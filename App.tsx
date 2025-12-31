@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   Card, PlayerId, GamePhase, GameState, Play, 
@@ -119,7 +118,7 @@ const App: React.FC = () => {
   const getNextRespondents = useCallback((initiator: PlayerId) => {
     const order = [PlayerId.PLAYER, PlayerId.AI_RIGHT, PlayerId.AI_LEFT];
     const idx = order.indexOf(initiator);
-    const sorted = [];
+    const sorted: PlayerId[] = [];
     for(let i = 1; i < 3; i++) {
         sorted.push(order[(idx + i) % 3]);
     }
@@ -127,14 +126,15 @@ const App: React.FC = () => {
   }, []);
 
   const broadcast = useCallback((type: string, payload: any) => {
-    Object.values(connectionsRef.current).forEach((conn: any) => {
+    Object.values(connectionsRef.current).forEach((c) => {
+      const conn = c as any;
       if (conn.open) conn.send({ type, payload, senderId: peerRef.current?.id });
     });
   }, []);
 
   const sendToHost = useCallback((type: string, payload: any) => {
     if (isHost) return;
-    const hostConn = Object.values(connectionsRef.current)[0];
+    const hostConn = Object.values(connectionsRef.current)[0] as any;
     if (hostConn && hostConn.open) hostConn.send({ type, payload, senderId: peerRef.current?.id });
   }, [isHost]);
 
@@ -190,7 +190,8 @@ const App: React.FC = () => {
       const initiatorStat = stats.find(s => s.id === gameState.kouLeInitiator)!;
       const initiatorRes = results.find(r => r.id === gameState.kouLeInitiator)!;
       if (initiatorStat.coins > 0) {
-        Object.entries(gameState.challengers).forEach(([chalId, chalCount]) => {
+        Object.entries(gameState.challengers).forEach(([chalId, val]) => {
+          const chalCount = val as number;
           if (chalCount > 0) {
             const chalStat = stats.find(s => s.id === chalId)!;
             const chalRes = results.find(r => r.id === chalId)!;
@@ -294,7 +295,7 @@ const App: React.FC = () => {
       let nextTurn = winner;
       let nextStarter = winner;
 
-      if (Object.values(currentHands).every(h => h.length === 0)) {
+      if (Object.values(currentHands).every((h: any) => h.length === 0)) {
         nextPhase = GamePhase.SETTLEMENT;
         const newState = { ...prev, collected: newCollected, logs: newLogs.slice(0, 30), phase: nextPhase, roundHistory, turn: nextTurn, starter: nextStarter, table: [] };
         if (isHost) broadcast('SYNC_STATE', newState);
@@ -384,7 +385,7 @@ const App: React.FC = () => {
       if (isLastRespondent) {
         const allAgreed = respondents.every(id => newResponses[id] === 'agree');
         if (allAgreed) {
-          const anyWinner = Object.values(prev.collected).some(cards => cards.length >= 9);
+          const anyWinner = Object.values(prev.collected).some((cards: any) => cards.length >= 9);
           if (anyWinner) {
             logs.unshift('🔄 全员同意“扣了”，已有玩家达标，直接进入结算。');
             const nextS = { ...prev, kouLeResponses: newResponses, logs: logs.slice(0, 30), phase: GamePhase.SETTLEMENT };
@@ -480,7 +481,7 @@ const App: React.FC = () => {
         const hand = gameState.hands[gameState.turn];
         const targetPlay = gameState.table.length > 0 ? gameState.table[0] : null;
         const currentMaxStr = gameState.table.reduce((max, p) => Math.max(max, p.strength), -1);
-        const collectedCount = gameState.collected[gameState.turn].length;
+        const collectedCount = (gameState.collected[gameState.turn] as Card[]).length;
         
         const cardsToPlay = aiDecidePlay(hand, targetPlay, currentMaxStr, collectedCount);
         const isDiscard = targetPlay && calculatePlayStrength(cardsToPlay).strength <= currentMaxStr;
@@ -501,7 +502,7 @@ const App: React.FC = () => {
 
       if (currentDecider && slots[currentDecider].type === 'ai') {
         const timer = setTimeout(() => {
-          const decision = aiEvaluateKouLe(gameState.hands[currentDecider], gameState.collected[currentDecider].length);
+          const decision = aiEvaluateKouLe(gameState.hands[currentDecider], (gameState.collected[currentDecider] as Card[]).length);
           processKouLeResponse(currentDecider, decision);
         }, 1500 + Math.random() * 1000);
         return () => clearTimeout(timer);
@@ -785,7 +786,7 @@ const App: React.FC = () => {
                         <button onClick={() => setSlots(prev => { 
                           const n = {...prev}; 
                           if(n[id].type === 'empty') { 
-                            const usedNames = Object.values(slots).map(s => s.name);
+                            const usedNames = Object.values(slots).map((s: SlotInfo) => s.name);
                             const name = AI_NAME_POOL.filter(n => !usedNames.includes(n))[0] || 'AI'; 
                             n[id] = { type: 'ai', name }; 
                             setGameState(gs => ({...gs, aiNames: {...gs.aiNames, [id]: name}})); 
@@ -876,7 +877,7 @@ const App: React.FC = () => {
               </div>
               <div className="flex flex-col items-center gap-0.5 text-center">
                 <span className="text-[10px] md:text-[11px] font-black text-slate-300 chinese-font">{slots[id].name} ({gameState.hands[id].length})</span>
-                <div className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[8px] md:text-[9px] font-black">已收: {gameState.collected[id].length}</div>
+                <div className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[8px] md:text-[9px] font-black">已收: {(gameState.collected[id] as Card[]).length}</div>
               </div>
             </div>
           ))}
@@ -914,7 +915,7 @@ const App: React.FC = () => {
         </div>
 
         <div className="h-44 md:h-64 bg-slate-900/95 border-t border-white/5 p-4 flex flex-col items-center justify-end relative z-40">
-           <div className="absolute left-6 top-[-25px] px-4 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-[10px] font-black md:hidden shadow-lg backdrop-blur-md">已收: {gameState.collected[PlayerId.PLAYER].length}</div>
+           <div className="absolute left-6 top-[-25px] px-4 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-[10px] font-black md:hidden shadow-lg backdrop-blur-md">已收: {(gameState.collected[PlayerId.PLAYER] as Card[]).length}</div>
            <div className="absolute left-1/2 -translate-x-1/2 top-[-25px] flex gap-2">
              <div className="px-3 py-1 bg-black/40 border border-white/10 rounded-lg text-[10px] font-black text-yellow-500 shadow-md">我的加倍: x{gameState.multipliers[PlayerId.PLAYER]}</div>
              <div className="px-3 py-1 bg-red-600/40 border border-white/10 rounded-lg text-[10px] font-black text-white shadow-md">全局倍率: x{gameState.grabMultiplier}</div>
