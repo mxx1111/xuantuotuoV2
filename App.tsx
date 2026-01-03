@@ -926,9 +926,9 @@ const App: React.FC = () => {
           )}
 
           {/* 手牌和按钮区域 - 放在游戏桌面底部 */}
-          <div className="absolute bottom-2 left-0 right-0 flex flex-col items-center z-40 px-2">
+          <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center z-40 px-2">
             {/* 操作按钮 */}
-            <div className="flex justify-center items-center gap-1 w-full max-w-3xl mb-1">
+            <div className="flex justify-center items-center gap-1 w-full max-w-3xl mb-16">
               <button onClick={() => handleAction(true)} disabled={!canDiscard} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${canDiscard ? 'bg-indigo-600 border-indigo-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>不出</button>
               <button onClick={handleHint} disabled={gameState.phase !== GamePhase.PLAYING || gameState.turn !== PlayerId.PLAYER} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${gameState.turn === PlayerId.PLAYER && gameState.phase === GamePhase.PLAYING ? 'bg-emerald-600 border-emerald-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>提示</button>
               {canInitiateKouLe && (
@@ -939,14 +939,14 @@ const App: React.FC = () => {
 
             {/* 手牌区域 */}
             <div className="flex justify-center items-end w-full overflow-x-auto custom-scrollbar">
-              <div className="flex items-end justify-center min-w-max px-1">
+              <div className="flex items-end justify-center min-w-max pb-0">
                 {playerHandSorted.map((c, i) => {
                   const isSel = selectedCards.some(sc => sc.id === c.id);
                   const cardCount = playerHandSorted.length;
                   // 动态计算重叠距离：卡牌越多，重叠越多
                   const overlapAmount = cardCount <= 5 ? '-0.5rem' : (cardCount === 6 ? '-0.6rem' : (cardCount === 7 ? '-0.7rem' : '-0.8rem'));
                   return (
-                    <div key={c.id} onClick={(e) => { e.stopPropagation(); setSelectedCards(prev => isSel ? prev.filter(sc => sc.id !== c.id) : [...prev, c]); }} className={`transition-all duration-300 cursor-pointer relative flex-shrink-0 scale-[0.6] hover:scale-[0.65] ${isSel ? '-translate-y-4 scale-[0.75]' : 'hover:-translate-y-1'}`} style={{ marginLeft: i === 0 ? 0 : overlapAmount, zIndex: isSel ? 100 + i : i }}>
+                    <div key={c.id} onClick={(e) => { e.stopPropagation(); setSelectedCards(prev => isSel ? prev.filter(sc => sc.id !== c.id) : [...prev, c]); }} className={`transition-all duration-300 cursor-pointer relative flex-shrink-0 scale-[0.6] hover:scale-[0.65] self-end ${isSel ? '-translate-y-4 scale-[0.75]' : 'hover:-translate-y-1'}`} style={{ marginLeft: i === 0 ? 0 : overlapAmount, zIndex: isSel ? 100 + i : i }}>
                       <div className={isSel ? 'drop-shadow-[0_4px_20px_rgba(16,185,129,0.6)] filter brightness-105' : 'drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)]'}><PlayingCard card={c} /></div>
                     </div>
                   );
