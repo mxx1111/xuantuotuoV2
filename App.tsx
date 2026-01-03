@@ -926,10 +926,10 @@ const App: React.FC = () => {
           )}
 
           {/* 手牌和按钮区域 - 放在游戏桌面底部 */}
-          <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center z-40 px-2">
+          <div className="absolute -bottom-8 left-0 right-0 flex flex-col items-center z-40 px-2">
             {/* 操作按钮 */}
             <div className="flex justify-center items-center gap-1 w-full max-w-3xl mb-2">
-              <button onClick={() => handleAction(true)} disabled={!canDiscard} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${canDiscard ? 'bg-indigo-600 border-indigo-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>不出</button>
+              <button onClick={() => handleAction(true)} disabled={!canDiscard} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${canDiscard ? 'bg-indigo-600 border-indigo-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>扣牌</button>
               <button onClick={handleHint} disabled={gameState.phase !== GamePhase.PLAYING || gameState.turn !== PlayerId.PLAYER} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${gameState.turn === PlayerId.PLAYER && gameState.phase === GamePhase.PLAYING ? 'bg-emerald-600 border-emerald-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>提示</button>
               {canInitiateKouLe && (
                 <button onClick={() => processInitiateKouLe(PlayerId.PLAYER)} className="flex-1 max-w-[55px] h-6 md:h-9 flex items-center justify-center bg-red-600 border border-red-500 rounded-md font-black text-[9px] md:text-sm transition-all active:scale-95 text-white shadow-md animate-pulse">扣了</button>
