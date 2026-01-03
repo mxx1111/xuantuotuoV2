@@ -20,9 +20,9 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, size = 'normal', isBack
 
   // 尺寸定义
   const dimensions = {
-    normal: 'w-4 h-6 md:w-24 md:h-36',
+    normal: 'w-11 h-12 md:w-24 md:h-36',
     small: 'w-9 h-14 md:w-16 md:h-24',
-    mini: 'w-10 h-14'
+    mini: 'w-4 h-6'
   };
 
   if (isBack) {
@@ -43,7 +43,7 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, size = 'normal', isBack
 
   // 字体大小定义
   const fonts = {
-    normal: { corner: 'text-[3.5px]', main: 'text-[7px] md:text-3xl', label: 'text-[3.5px] md:text-xl' },
+    normal: { corner: 'text-[8px] md:text-[10px]', main: 'text-lg md:text-3xl', label: 'text-[9px] md:text-xl' },
     small: { corner: 'text-[6.5px]', main: 'text-base md:text-xl', label: 'text-[7.5px] md:text-sm' },
     mini: { corner: 'text-[7px]', main: 'text-[12px]', label: 'text-[8px]' }
   };

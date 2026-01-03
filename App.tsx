@@ -855,7 +855,7 @@ const App: React.FC = () => {
           <div className="w-20 shrink-0"></div>
         </div>
 
-        <div className="flex-shrink-0 relative flex items-center justify-center py-8 landscape:py-4 h-[62vh] md:h-[40vh] landscape:h-[59vh]">
+        <div className="flex-1 relative flex items-center justify-center py-8 landscape:py-4">
           {[PlayerId.AI_LEFT, PlayerId.AI_RIGHT].map(id => (
             <div key={id} className={`absolute top-2 ${id === PlayerId.AI_LEFT ? 'left-4' : 'right-4'} flex flex-col items-center gap-2 z-30`}>
               <div className="relative">
@@ -899,14 +899,14 @@ const App: React.FC = () => {
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-6 animate-in fade-in">
               <div className="bg-slate-900 border border-emerald-500/40 p-8 rounded-3xl max-w-sm w-full text-center shadow-2xl">
                 <div className="text-3xl mb-4">⚖️</div>
-                <h3 className="text-xl font-black text-emerald-500 chinese-font mb-2">“扣了”博弈中</h3>
+                <h3 className="text-xl font-black text-emerald-500 chinese-font mb-2">"扣了"博弈中</h3>
                 {(() => {
                   const initiator = gameState.kouLeInitiator;
                   const respondents = getNextRespondents(initiator!);
                   const currentDecider = respondents.find(id => gameState.kouLeResponses[id] === null);
                   const initiatorName = initiator === PlayerId.PLAYER ? '您' : slots[initiator!].name;
                   const deciderName = currentDecider === PlayerId.PLAYER ? '我' : (currentDecider ? slots[currentDecider].name : '...');
-                  
+
                   return (
                     <>
                       <p className="text-sm text-slate-400 mb-6">{initiatorName} 发起博弈，当前 {deciderName} 表态...</p>
@@ -924,33 +924,36 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
 
-        <div className="flex-shrink-0 py-0 flex flex-col items-center relative z-40 h-[60px] md:h-[280px] landscape:h-[55px]">
-           <div className="flex justify-center items-center gap-1 w-full max-w-3xl px-2 mb-0">
-             <button onClick={() => handleAction(true)} disabled={!canDiscard} className={`flex-1 max-w-[65px] h-5 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${canDiscard ? 'bg-indigo-600 border-indigo-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>不出</button>
-             <button onClick={handleHint} disabled={gameState.phase !== GamePhase.PLAYING || gameState.turn !== PlayerId.PLAYER} className={`flex-1 max-w-[65px] h-5 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${gameState.turn === PlayerId.PLAYER && gameState.phase === GamePhase.PLAYING ? 'bg-emerald-600 border-emerald-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>提示</button>
-             {canInitiateKouLe && (
-               <button onClick={() => processInitiateKouLe(PlayerId.PLAYER)} className="flex-1 max-w-[55px] h-5 md:h-9 flex items-center justify-center bg-red-600 border border-red-500 rounded-md font-black text-[9px] md:text-sm transition-all active:scale-95 text-white shadow-md animate-pulse">扣了</button>
-             )}
-             <button onClick={() => handleAction(false)} disabled={!canFollow} className={`flex-1 max-w-[65px] h-5 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${canFollow ? 'bg-orange-600 border-orange-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>{gameState.table.length === 0 ? '出牌' : '跟牌'}</button>
-           </div>
+          {/* 手牌和按钮区域 - 放在游戏桌面底部 */}
+          <div className="absolute bottom-2 left-0 right-0 flex flex-col items-center z-40 px-2">
+            {/* 操作按钮 */}
+            <div className="flex justify-center items-center gap-1 w-full max-w-3xl mb-1">
+              <button onClick={() => handleAction(true)} disabled={!canDiscard} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${canDiscard ? 'bg-indigo-600 border-indigo-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>不出</button>
+              <button onClick={handleHint} disabled={gameState.phase !== GamePhase.PLAYING || gameState.turn !== PlayerId.PLAYER} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${gameState.turn === PlayerId.PLAYER && gameState.phase === GamePhase.PLAYING ? 'bg-emerald-600 border-emerald-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>提示</button>
+              {canInitiateKouLe && (
+                <button onClick={() => processInitiateKouLe(PlayerId.PLAYER)} className="flex-1 max-w-[55px] h-6 md:h-9 flex items-center justify-center bg-red-600 border border-red-500 rounded-md font-black text-[9px] md:text-sm transition-all active:scale-95 text-white shadow-md animate-pulse">扣了</button>
+              )}
+              <button onClick={() => handleAction(false)} disabled={!canFollow} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${canFollow ? 'bg-orange-600 border-orange-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>{gameState.table.length === 0 ? '出牌' : '跟牌'}</button>
+            </div>
 
-           <div className="flex justify-center items-end px-1 overflow-x-auto overflow-y-visible w-full flex-1 custom-scrollbar pb-0">
-             <div className="flex items-end justify-center min-w-max">
-               {playerHandSorted.map((c, i) => {
+            {/* 手牌区域 */}
+            <div className="flex justify-center items-end w-full overflow-x-auto custom-scrollbar">
+              <div className="flex items-end justify-center min-w-max px-1">
+                {playerHandSorted.map((c, i) => {
                   const isSel = selectedCards.some(sc => sc.id === c.id);
                   const cardCount = playerHandSorted.length;
                   // 动态计算重叠距离：卡牌越多，重叠越多
-                  const overlapAmount = cardCount <= 5 ? '-0.25rem' : (cardCount === 6 ? '-0.35rem' : (cardCount === 7 ? '-0.45rem' : '-0.55rem'));
+                  const overlapAmount = cardCount <= 5 ? '-0.5rem' : (cardCount === 6 ? '-0.6rem' : (cardCount === 7 ? '-0.7rem' : '-0.8rem'));
                   return (
-                    <div key={c.id} onClick={(e) => { e.stopPropagation(); setSelectedCards(prev => isSel ? prev.filter(sc => sc.id !== c.id) : [...prev, c]); }} className={`transition-all duration-300 cursor-pointer relative flex-shrink-0 ${isSel ? '-translate-y-2 landscape:-translate-y-1.5 scale-110' : ''}`} style={{ marginLeft: i === 0 ? 0 : overlapAmount, zIndex: i }}>
+                    <div key={c.id} onClick={(e) => { e.stopPropagation(); setSelectedCards(prev => isSel ? prev.filter(sc => sc.id !== c.id) : [...prev, c]); }} className={`transition-all duration-300 cursor-pointer relative flex-shrink-0 scale-[0.6] ${isSel ? '-translate-y-3 scale-[0.75]' : ''}`} style={{ marginLeft: i === 0 ? 0 : overlapAmount, zIndex: i }}>
                       <div className={isSel ? 'drop-shadow-[0_0_25px_rgba(16,185,129,0.8)]' : 'drop-shadow-lg'}><PlayingCard card={c} /></div>
                     </div>
                   );
-               })}
-             </div>
-           </div>
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
