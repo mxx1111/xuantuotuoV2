@@ -802,7 +802,7 @@ const App: React.FC = () => {
               ))}
             </div>
             {isHost ? (
-               <div className="flex flex-col gap-4 w-full max-sm">
+               <div className="flex flex-col gap-4 w-full max-sm pb-16 landscape:pb-20">
                   <button onClick={() => initGame()} disabled={slots[PlayerId.AI_LEFT].type === 'empty' || slots[PlayerId.AI_RIGHT].type === 'empty'} className={`px-20 py-6 rounded-3xl font-black text-2xl transition-all chinese-font shadow-2xl ${slots[PlayerId.AI_LEFT].type !== 'empty' && slots[PlayerId.AI_RIGHT].type !== 'empty' ? 'bg-emerald-600 hover:scale-105 active:scale-95' : 'bg-slate-800 text-slate-600 opacity-50 cursor-not-allowed'}`}>开 始 游 戏</button>
                   <button onClick={quitToLobby} className="py-3 text-slate-500 text-xs font-black hover:text-slate-300 transition-all uppercase tracking-widest">解散房间并返回</button>
                </div>
