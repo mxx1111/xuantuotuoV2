@@ -946,7 +946,7 @@ const App: React.FC = () => {
                   // 动态计算重叠距离：卡牌越多，重叠越多
                   const overlapAmount = cardCount <= 5 ? '-0.5rem' : (cardCount === 6 ? '-0.6rem' : (cardCount === 7 ? '-0.7rem' : '-0.8rem'));
                   return (
-                    <div key={c.id} onClick={(e) => { e.stopPropagation(); setSelectedCards(prev => isSel ? prev.filter(sc => sc.id !== c.id) : [...prev, c]); }} className={`transition-all duration-300 cursor-pointer relative flex-shrink-0 scale-[0.6] hover:scale-[0.65] self-end ${isSel ? '-translate-y-4 scale-[0.75]' : 'hover:-translate-y-1'}`} style={{ marginLeft: i === 0 ? 0 : overlapAmount, zIndex: isSel ? 100 + i : i }}>
+                    <div key={c.id} onClick={(e) => { e.stopPropagation(); setSelectedCards(prev => isSel ? prev.filter(sc => sc.id !== c.id) : [...prev, c]); }} className={`transition-all duration-300 cursor-pointer relative flex-shrink-0 scale-[0.6] hover:scale-[0.65] self-end ${isSel ? '-translate-y-4 scale-[0.75]' : ''}`} style={{ marginLeft: i === 0 ? 0 : overlapAmount, zIndex: isSel ? 100 + i : i }}>
                       <div className={isSel ? 'drop-shadow-[0_4px_20px_rgba(16,185,129,0.6)] filter brightness-105' : 'drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)]'}><PlayingCard card={c} /></div>
                     </div>
                   );
