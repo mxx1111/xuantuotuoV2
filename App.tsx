@@ -893,7 +893,7 @@ const App: React.FC = () => {
               </div>
             </div>
           ))}
-          <div className="flex items-center justify-center gap-3 md:gap-24 z-20 w-full max-w-5xl px-2 scale-90 md:scale-100">{renderTableSlot(PlayerId.AI_LEFT)}{renderTableSlot(PlayerId.PLAYER)}{renderTableSlot(PlayerId.AI_RIGHT)}</div>
+          <div className="absolute top-2 left-0 right-0 flex items-center justify-center gap-3 md:gap-24 z-20 w-full max-w-5xl px-2 scale-90 md:scale-100 mx-auto">{renderTableSlot(PlayerId.AI_LEFT)}{renderTableSlot(PlayerId.PLAYER)}{renderTableSlot(PlayerId.AI_RIGHT)}</div>
           
           {gameState.phase === GamePhase.KOU_LE_DECISION && (
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-6 animate-in fade-in">
@@ -958,26 +958,45 @@ const App: React.FC = () => {
       </div>
 
       {gameState.phase === GamePhase.SETTLEMENT && (
-        <div className="absolute inset-0 z-[300] bg-slate-950/98 flex items-center justify-center p-4 backdrop-blur-3xl animate-in zoom-in overflow-hidden">
-          <div className="max-w-md w-full max-h-[90vh] flex flex-col bg-slate-900 border border-emerald-500/40 p-5 md:p-10 rounded-[30px] md:rounded-[40px] shadow-2xl text-center overflow-hidden">
-            <h2 className="text-xl md:text-4xl font-black chinese-font text-emerald-500 mb-4 md:mb-6 tracking-widest shrink-0">对局结算</h2>
-            <div className="flex-1 overflow-y-auto space-y-3 md:space-y-4 mb-4 md:mb-8 pr-2 custom-scrollbar">
+        <div className="absolute inset-0 z-[300] bg-slate-950/98 flex items-center justify-center p-4 backdrop-blur-3xl animate-in zoom-in">
+          <div className="max-w-xl w-full flex flex-col bg-slate-900 border border-emerald-500/40 p-5 rounded-3xl shadow-2xl text-center">
+            <h2 className="text-2xl font-black chinese-font text-emerald-500 mb-4 tracking-widest">对局结算</h2>
+
+            {/* 结算内容 */}
+            <div className="space-y-2 mb-4">
               {settlementData.map(res => (
-                <div key={res.id} className={`flex justify-between items-center p-4 bg-white/5 rounded-2xl border transition-all ${res.netGain < 0 ? 'border-red-500/30 opacity-70' : (res.netGain > 0 ? 'border-emerald-500/50 scale-105 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'border-white/5')}`}>
-                  <div className="flex flex-col items-start">
-                    <span className="font-black text-sm md:text-lg chinese-font">{slots[res.id].name}</span>
-                    <span className="text-[10px] text-yellow-500 font-bold uppercase">总倍率: x{res.finalMultiplier}</span>
+                <div key={res.id} className={`relative flex items-center justify-between p-3 rounded-xl border-2 ${res.netGain < 0 ? 'border-red-500/50 bg-red-500/10' : (res.netGain > 0 ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-white/10 bg-white/5')}`}>
+
+                  {/* 超大胜负标识 */}
+                  <div className={`absolute -left-3 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center font-black text-xl shadow-xl ${res.netGain > 0 ? 'bg-emerald-500 text-white' : (res.netGain < 0 ? 'bg-red-500 text-white' : 'bg-slate-700 text-slate-400')}`}>
+                    {res.netGain > 0 ? '胜' : (res.netGain < 0 ? '负' : '平')}
                   </div>
+
+                  {/* 左侧信息 */}
+                  <div className="flex-1 flex flex-col items-start ml-10 gap-0.5">
+                    <span className="font-black text-lg chinese-font">{slots[res.id].name}</span>
+                    <div className="flex gap-1.5 items-center flex-wrap">
+                      <span className={`font-black px-1.5 py-0.5 rounded text-[10px] ${res.coins > 0 ? 'bg-emerald-500/30 text-emerald-300' : 'bg-slate-700 text-slate-400'}`}>{res.level}</span>
+                      <span className="text-[10px] text-slate-400">{res.cards}张</span>
+                      <span className="text-[10px] text-yellow-500 font-bold">x{res.finalMultiplier}</span>
+                    </div>
+                  </div>
+
+                  {/* 右侧星光币变化 */}
                   <div className="flex flex-col items-end">
-                    <span className={`font-black px-2 md:px-3 py-0.5 md:py-1 rounded-lg text-[10px] md:text-sm ${res.coins > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>{res.level} ({res.cards}张)</span>
-                    <span className={`text-xs md:text-base font-black mt-1 ${res.netGain > 0 ? 'text-yellow-500' : (res.netGain < 0 ? 'text-red-500' : 'text-slate-400')}`}>{res.netGain > 0 ? `+${res.netGain}` : res.netGain} 🪙</span>
+                    <span className={`text-2xl font-black leading-none ${res.netGain > 0 ? 'text-emerald-400' : (res.netGain < 0 ? 'text-red-400' : 'text-slate-400')}`}>
+                      {res.netGain > 0 ? `+${res.netGain}` : res.netGain}
+                    </span>
+                    <span className="text-[9px] text-yellow-500 mt-0.5">🪙</span>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="shrink-0 space-y-2 md:space-y-3">
-              {isHost && (<button onClick={() => {setGameState(prev => ({...prev, phase: GamePhase.WAITING})); broadcast('SYNC_STATE', {...gameState, phase: GamePhase.WAITING});}} className="w-full py-3 md:py-5 bg-emerald-600 rounded-2xl font-black text-base md:text-xl shadow-2xl transition-all chinese-font active:scale-95">整 顿 再 战</button>)}
-              <button onClick={quitToLobby} className="w-full py-2 md:py-3 bg-slate-800 text-slate-400 rounded-xl text-[10px] md:text-xs font-black transition-all">返回大厅</button>
+
+            {/* 按钮区 */}
+            <div className="flex gap-2">
+              {isHost && (<button onClick={() => {setGameState(prev => ({...prev, phase: GamePhase.WAITING})); broadcast('SYNC_STATE', {...gameState, phase: GamePhase.WAITING});}} className="flex-1 py-2.5 bg-emerald-600 rounded-lg font-black text-sm shadow-lg transition-all chinese-font active:scale-95">再来一局</button>)}
+              <button onClick={quitToLobby} className="flex-1 py-2.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-black transition-all active:scale-95">返回大厅</button>
             </div>
           </div>
         </div>
