@@ -43,7 +43,7 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, size = 'normal', isBack
 
   // 字体大小定义
   const fonts = {
-    normal: { corner: 'text-[8px] md:text-[10px]', main: 'text-lg md:text-3xl', label: 'text-[9px] md:text-xl' },
+    normal: { corner: 'text-[20px] md:text-[10px]', main: 'text-lg md:text-3xl', label: 'text-[12px] md:text-xl' },
     small: { corner: 'text-[6.5px]', main: 'text-base md:text-xl', label: 'text-[7.5px] md:text-sm' },
     mini: { corner: 'text-[7px]', main: 'text-[12px]', label: 'text-[8px]' }
   };
@@ -52,8 +52,8 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, size = 'normal', isBack
 
   return (
     <div className={baseClasses}>
-      <div className={`absolute ${size === 'normal' ? 'top-[0.5px] left-[0.5px]' : 'top-0.5 left-0.5'} flex flex-col items-center leading-none ${suitColor} ${f.corner} font-black`}>
-        <span>{card.value === 'Joker' ? (card.name === '大王' ? 'RJ' : 'SJ') : card.value}</span>
+      <div className={`absolute ${size === 'normal' ? 'top-[0.5px] left-[0.5px]' : 'top-0.5 left-0.5'} flex flex-col items-center leading-none ${suitColor} font-black`}>
+        <span className={size === 'normal' ? 'text-[20px]' : f.corner}>{card.value === 'Joker' ? (card.name === '大王' ? 'RJ' : 'SJ') : card.value}</span>
         <span className="scale-75 origin-top">{card.suit}</span>
       </div>
 
@@ -67,8 +67,8 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, size = 'normal', isBack
         </div>
       </div>
 
-      <div className={`absolute ${size === 'normal' ? 'bottom-[0.5px] right-[0.5px]' : 'bottom-0.5 right-0.5'} flex flex-col items-center rotate-180 leading-none ${suitColor} ${f.corner} font-black`}>
-        <span>{card.value === 'Joker' ? (card.name === '大王' ? 'RJ' : 'SJ') : card.value}</span>
+      <div className={`absolute ${size === 'normal' ? 'bottom-[0.5px] right-[0.5px]' : 'bottom-0.5 right-0.5'} flex flex-col items-center rotate-180 leading-none ${suitColor} font-black`}>
+        <span className={size === 'normal' ? 'text-[20px]' : f.corner}>{card.value === 'Joker' ? (card.name === '大王' ? 'RJ' : 'SJ') : card.value}</span>
         <span className="scale-75 origin-top">{card.suit}</span>
       </div>
       <div className={`absolute inset-0 ${size === 'normal' ? 'rounded-sm' : 'rounded-lg'} pointer-events-none bg-gradient-to-tr from-transparent via-white/10 to-white/20`}></div>
