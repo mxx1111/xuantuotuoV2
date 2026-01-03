@@ -34,10 +34,26 @@
         
         .custom-scrollbar::-webkit-scrollbar {
             width: 4px;
+            height: 4px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.1);
             border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        /* 移动端触摸优化 */
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+        }
+
+        /* 防止横向滚动时的过度滚动 */
+        html, body {
+            overscroll-behavior-x: none;
+            overscroll-behavior-y: none;
         }
 
         .mask-top-fade {

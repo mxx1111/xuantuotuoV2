@@ -651,20 +651,20 @@ const App: React.FC = () => {
 
   const renderTableSlot = (pid: PlayerId) => {
     const play = gameState.table.find(p => p.playerId === pid);
-    if (!play) return <div className="w-20 h-32 md:w-24 md:h-36 rounded-2xl border-2 border-dashed border-white/5 flex items-center justify-center text-slate-800 text-[10px] uppercase font-black tracking-tighter">Wait...</div>;
+    if (!play) return <div className="w-12 h-18 md:w-16 md:h-24 rounded-xl border-2 border-dashed border-white/5 flex items-center justify-center text-slate-800 text-[9px] uppercase font-black tracking-tighter">Wait...</div>;
 
     const isPlayer = pid === PlayerId.PLAYER;
     const animationClass = pid === PlayerId.PLAYER ? 'play-animation-bottom' : (pid === PlayerId.AI_LEFT ? 'play-animation-left' : 'play-animation-right');
 
     return (
-      <div className={`flex transition-transform duration-500 ${isPlayer ? 'translate-y-12' : ''} ${animationClass}`}>
+      <div className={`flex transition-transform duration-500 ${animationClass}`}>
         {play.cards.map((c, i) => (
-          <div 
-            key={c.id} 
-            style={{ 
-              marginLeft: i === 0 ? 0 : '-1.5rem', 
-              zIndex: i 
-            }} 
+          <div
+            key={c.id}
+            style={{
+              marginLeft: i === 0 ? 0 : '-1.2rem',
+              zIndex: i
+            }}
             className="drop-shadow-2xl"
           >
             <PlayingCard card={c} size="small" isBack={play.type === 'discard'} />
@@ -757,7 +757,7 @@ const App: React.FC = () => {
   }, [gameState.phase, gameState.turn, gameState.table.length, gameState.kouLeInitiator]);
 
   return (
-    <div className="h-screen w-full flex flex-col bg-slate-950 text-slate-100 overflow-hidden relative landscape:flex-row">
+    <div className="h-screen w-full flex flex-col bg-slate-950 text-slate-100 overflow-hidden relative">
       {gameState.phase === GamePhase.LOBBY && renderLobby()}
       {showRules && renderRulesModal()}
       {showHistory && renderHistoryModal()}
@@ -839,12 +839,16 @@ const App: React.FC = () => {
                <span className="text-xs md:text-sm font-black text-emerald-400 chinese-font truncate block max-w-[150px] md:max-w-md">{gameState.logs[0] || '对局进行中...'}</span>
             </div>
           </div>
-          <div className="text-xs font-mono bg-black/60 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 shrink-0"><span className="text-yellow-500 text-base">🪙</span><span className="font-bold text-yellow-100">{gameState.starCoins[PlayerId.PLAYER]}</span></div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => setShowRules(true)} className="w-9 h-9 flex items-center justify-center bg-slate-800 rounded-lg text-sm font-black text-slate-400 active:scale-90 transition-all border border-white/5">规</button>
+            <button onClick={() => setShowHistory(true)} className="w-9 h-9 flex items-center justify-center bg-slate-800 rounded-lg border border-white/5 font-black text-sm chinese-font transition-all active:scale-90 text-slate-300">录</button>
+            <div className="text-xs font-mono bg-black/60 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2"><span className="text-yellow-500 text-base">🪙</span><span className="font-bold text-yellow-100">{gameState.starCoins[PlayerId.PLAYER]}</span></div>
+          </div>
         </div>
 
-        <div className="flex-1 relative flex items-center justify-center landscape:pb-12">
+        <div className="flex-shrink-0 relative flex items-center justify-center py-6 landscape:py-3 h-[42vh] md:h-[40vh] landscape:h-[38vh]">
           {[PlayerId.AI_LEFT, PlayerId.AI_RIGHT].map(id => (
-            <div key={id} className={`absolute top-6 ${id === PlayerId.AI_LEFT ? 'left-6' : 'right-6'} flex flex-col items-center gap-2 z-30`}>
+            <div key={id} className={`absolute top-2 ${id === PlayerId.AI_LEFT ? 'left-4' : 'right-4'} flex flex-col items-center gap-2 z-30`}>
               <div className="relative">
                 <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl border-2 bg-slate-900 flex items-center justify-center text-2xl md:text-3xl shadow-2xl transition-all duration-500 ${gameState.turn === id && gameState.phase === GamePhase.PLAYING ? 'border-emerald-500 ring-4 ring-emerald-500/20 scale-110' : 'border-white/10'}`}>{slots[id].type === 'human' ? '侠' : (slots[id].type === 'ai' ? '🤖' : '👴')}</div>
                 
@@ -880,7 +884,7 @@ const App: React.FC = () => {
               </div>
             </div>
           ))}
-          <div className="flex items-center justify-center gap-8 md:gap-24 z-20 w-full max-w-5xl px-10 scale-90 md:scale-100">{renderTableSlot(PlayerId.AI_LEFT)}{renderTableSlot(PlayerId.PLAYER)}{renderTableSlot(PlayerId.AI_RIGHT)}</div>
+          <div className="flex items-center justify-center gap-4 md:gap-24 z-20 w-full max-w-5xl px-4 scale-85 md:scale-100">{renderTableSlot(PlayerId.AI_LEFT)}{renderTableSlot(PlayerId.PLAYER)}{renderTableSlot(PlayerId.AI_RIGHT)}</div>
           
           {gameState.phase === GamePhase.KOU_LE_DECISION && (
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-6 animate-in fade-in">
@@ -913,35 +917,38 @@ const App: React.FC = () => {
           )}
         </div>
 
-        <div className="h-36 md:h-48 landscape:h-32 bg-slate-900/95 border-t border-white/5 p-4 flex flex-col items-center justify-end relative z-40">
-           <div className="absolute left-6 top-[-25px] px-4 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-[10px] font-black md:hidden shadow-lg backdrop-blur-md">已收: {(gameState.collected[PlayerId.PLAYER] as Card[]).length}</div>
-           <div className="absolute left-1/2 -translate-x-1/2 top-[-25px] flex gap-2">
-             <div className="px-3 py-1 bg-black/40 border border-white/10 rounded-lg text-[10px] font-black text-yellow-500 shadow-md">我的加倍: x{gameState.multipliers[PlayerId.PLAYER]}</div>
-             <div className="px-3 py-1 bg-red-600/40 border border-white/10 rounded-lg text-[10px] font-black text-white shadow-md">全局倍率: x{gameState.grabMultiplier}</div>
+        <div className="flex-shrink-0 bg-slate-900/95 border-t border-white/5 py-1 flex flex-col items-center relative z-40 h-[180px] md:h-[280px] landscape:h-[160px]">
+           <div className="absolute left-3 top-[-16px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-md text-[8px] font-black md:hidden shadow-lg backdrop-blur-md">已收: {(gameState.collected[PlayerId.PLAYER] as Card[]).length}</div>
+           <div className="absolute left-1/2 -translate-x-1/2 top-[-16px] flex gap-1 landscape:gap-0.5">
+             <div className="px-1.5 py-0.5 bg-black/40 border border-white/10 rounded-md text-[8px] font-black text-yellow-500 shadow-md">我的加倍: x{gameState.multipliers[PlayerId.PLAYER]}</div>
+             <div className="px-1.5 py-0.5 bg-red-600/40 border border-white/10 rounded-md text-[8px] font-black text-white shadow-md">全局倍率: x{gameState.grabMultiplier}</div>
            </div>
-           <div className="flex gap-2 justify-center pb-2 px-10 overflow-visible max-w-7xl w-full scale-90 landscape:scale-75">
-             {playerHandSorted.map((c, i) => {
-                const isSel = selectedCards.some(sc => sc.id === c.id);
-                return (
-                  <div key={c.id} onClick={(e) => { e.stopPropagation(); setSelectedCards(prev => isSel ? prev.filter(sc => sc.id !== c.id) : [...prev, c]); }} className={`transition-all duration-300 cursor-pointer relative ${isSel ? '-translate-y-8 landscape:-translate-y-6 scale-105' : ''}`} style={{ marginLeft: i === 0 ? 0 : '-2.5rem', zIndex: i }}>
-                    <div className={isSel ? 'drop-shadow-[0_0_25px_rgba(16,185,129,0.8)]' : 'drop-shadow-lg'}><PlayingCard card={c} /></div>
-                  </div>
-                );
-             })}
+
+           <div className="flex justify-center items-center gap-1 w-full max-w-3xl px-2 mt-0.5 mb-1">
+             <button onClick={() => handleAction(true)} disabled={!canDiscard} className={`flex-1 max-w-[70px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[10px] md:text-sm transition-all border ${canDiscard ? 'bg-indigo-600 border-indigo-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>不出</button>
+             <button onClick={handleHint} disabled={gameState.phase !== GamePhase.PLAYING || gameState.turn !== PlayerId.PLAYER} className={`flex-1 max-w-[70px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[10px] md:text-sm transition-all border ${gameState.turn === PlayerId.PLAYER && gameState.phase === GamePhase.PLAYING ? 'bg-emerald-600 border-emerald-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>提示</button>
+             {canInitiateKouLe && (
+               <button onClick={() => processInitiateKouLe(PlayerId.PLAYER)} className="flex-1 max-w-[60px] h-6 md:h-9 flex items-center justify-center bg-red-600 border border-red-500 rounded-md font-black text-[10px] md:text-sm transition-all active:scale-95 text-white shadow-md animate-pulse">扣了</button>
+             )}
+             <button onClick={() => handleAction(false)} disabled={!canFollow} className={`flex-1 max-w-[70px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[10px] md:text-sm transition-all border ${canFollow ? 'bg-orange-600 border-orange-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>{gameState.table.length === 0 ? '出牌' : '跟牌'}</button>
+           </div>
+
+           <div className="flex justify-center items-end px-1 overflow-x-auto overflow-y-visible w-full flex-1 custom-scrollbar pb-0.5">
+             <div className="flex items-end justify-center min-w-max">
+               {playerHandSorted.map((c, i) => {
+                  const isSel = selectedCards.some(sc => sc.id === c.id);
+                  const cardCount = playerHandSorted.length;
+                  // 动态计算重叠距离：卡牌越多，重叠越多
+                  const overlapAmount = cardCount <= 5 ? '-1rem' : (cardCount === 6 ? '-1.3rem' : (cardCount === 7 ? '-1.6rem' : '-1.8rem'));
+                  return (
+                    <div key={c.id} onClick={(e) => { e.stopPropagation(); setSelectedCards(prev => isSel ? prev.filter(sc => sc.id !== c.id) : [...prev, c]); }} className={`transition-all duration-300 cursor-pointer relative flex-shrink-0 ${isSel ? '-translate-y-6 landscape:-translate-y-4 scale-110' : ''}`} style={{ marginLeft: i === 0 ? 0 : overlapAmount, zIndex: i }}>
+                      <div className={isSel ? 'drop-shadow-[0_0_25px_rgba(16,185,129,0.8)]' : 'drop-shadow-lg'}><PlayingCard card={c} /></div>
+                    </div>
+                  );
+               })}
+             </div>
            </div>
         </div>
-      </div>
-      
-      <div className="w-16 md:w-24 landscape:h-screen landscape:pr-8 bg-slate-900/90 border-l border-white/10 flex flex-col items-center justify-center p-3 gap-5 md:gap-7 z-[100] backdrop-blur-lg shadow-2xl">
-        <button onClick={() => handleAction(false)} disabled={!canFollow} className={`w-12 h-12 md:w-16 md:h-16 flex items-center justify-center rounded-2xl font-black transition-all text-xl md:text-3xl border border-white/10 ${canFollow ? 'bg-emerald-600 active:scale-90 shadow-[0_0_25px_rgba(16,185,129,0.3)] text-white' : 'bg-slate-800/50 text-slate-700 opacity-40 cursor-not-allowed'}`}>{gameState.table.length === 0 ? '出' : '跟'}</button>
-        <button onClick={() => handleAction(true)} disabled={!canDiscard} className={`w-12 h-12 md:w-16 md:h-16 flex items-center justify-center rounded-2xl font-black transition-all text-xl md:text-3xl border border-white/10 ${canDiscard ? 'bg-orange-700 active:scale-90 shadow-[0_0_25px_rgba(194,65,12,0.3)] text-white' : 'bg-slate-800/50 text-slate-700 opacity-40 cursor-not-allowed'}`}>扣</button>
-        <div className="h-px w-8 bg-white/10"></div>
-        <button onClick={handleHint} disabled={gameState.phase !== GamePhase.PLAYING || gameState.turn !== PlayerId.PLAYER} className={`w-12 h-12 md:w-16 md:h-16 flex items-center justify-center rounded-2xl font-black transition-all text-xl md:text-3xl border border-white/10 ${gameState.turn === PlayerId.PLAYER && gameState.phase === GamePhase.PLAYING ? 'bg-indigo-600 active:scale-90 shadow-[0_0_25px_rgba(79,70,229,0.3)] text-white' : 'bg-slate-800/50 text-slate-700 opacity-40 cursor-not-allowed'}`}>提</button>
-        <button onClick={() => setShowRules(true)} className="w-10 h-10 md:w-14 md:h-14 flex items-center justify-center bg-slate-800 rounded-xl text-lg md:text-xl font-black text-slate-400 active:scale-90 transition-all border border-white/5">规</button>
-        <button onClick={() => setShowHistory(true)} className="w-10 h-10 md:w-14 md:h-14 flex items-center justify-center bg-slate-800 rounded-xl border border-white/5 font-black text-lg md:text-xl chinese-font transition-all active:scale-90 text-slate-300">录</button>
-        {canInitiateKouLe && (
-          <button onClick={() => processInitiateKouLe(PlayerId.PLAYER)} className="w-10 h-10 md:w-14 md:h-14 flex items-center justify-center bg-red-600 rounded-xl border border-red-400 font-black text-xs md:text-sm transition-all active:scale-90 text-white shadow-lg animate-pulse">扣了</button>
-        )}
       </div>
 
       {gameState.phase === GamePhase.SETTLEMENT && (
