@@ -682,7 +682,7 @@ const App: React.FC = () => {
     return (
       <div className="absolute inset-0 z-[400] bg-slate-950/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 animate-in zoom-in">
         <div className="bg-slate-900 border border-emerald-500/40 p-10 rounded-[3rem] shadow-2xl text-center max-w-md w-full relative">
-          <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 bg-emerald-500 text-slate-950 font-black px-6 py-2 rounded-full shadow-xl">
+          <div className="absolute top-[-40px] landscape:top-[-20px] left-1/2 -translate-x-1/2 bg-emerald-500 text-slate-950 font-black px-6 py-2 rounded-full shadow-xl">
             {isMyTurn ? "轮到您决策" : `等待 ${slots[gameState.betTurn!].name} 决策...`}
           </div>
           
