@@ -58,12 +58,22 @@ const SoundEngine = {
 
 const AI_NAME_POOL = ['王铁柱', '李翠花', '赵大壮', '孙木耳', '钱多多', '周公瑾', '吴二娃', '郑牛牛', '刘大脑袋', '马马虎虎', '张三丰', '李探花', '阿珂', '韦小宝', '令狐冲'];
 
+const getRandomInt = (max: number): number => {
+  if (max <= 0) return 0;
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const randomArray = new Uint32Array(1);
+    crypto.getRandomValues(randomArray);
+    return randomArray[0] % max;
+  }
+  return Math.floor(Math.random() * max);
+};
+
 const pickAiName = (used: string[]): string => {
   const available = AI_NAME_POOL.filter(name => !used.includes(name));
   if (available.length === 0) {
     return `神秘AI${Math.floor(Math.random() * 900 + 100)}`;
   }
-  const randomIdx = Math.floor(Math.random() * available.length);
+  const randomIdx = getRandomInt(available.length);
   return available[randomIdx];
 };
 
