@@ -278,16 +278,29 @@ const App: React.FC = () => {
 
   const resolveTrick = useCallback((currentTable: Play[], currentHands: Record<PlayerId, Card[]>) => {
     setGameState(prev => {
+      // 安全检查1：确保传入的table有且只有3个Play
+      if (currentTable.length !== 3) {
+        console.warn(`resolveTrick called with ${currentTable.length} plays instead of 3`);
+        return prev;
+      }
+
+      // 安全检查2：确保当前状态的table也是3，避免重复执行
+      // 如果table已经被清空（上一次resolveTrick执行过了），则跳过
+      if (prev.table.length !== 3) {
+        console.warn(`resolveTrick skipped: prev.table.length is ${prev.table.length}, already processed`);
+        return prev;
+      }
+
       const sortedPlays = [...currentTable].sort((a, b) => b.strength - a.strength);
       const winner = sortedPlays[0].playerId;
       const allTrickCards = currentTable.flatMap(p => p.cards);
-      
+
       const newCollected = { ...prev.collected };
       newCollected[winner] = [...newCollected[winner], ...allTrickCards];
-      
+
       const newLogs = [...prev.logs];
       newLogs.unshift(`✅ ${slots[winner].name} 赢得了本轮，收走 ${allTrickCards.length} 张牌。`);
-      
+
       const roundHistory = [...prev.roundHistory, currentTable];
       
       let nextPhase = prev.phase;
@@ -333,7 +346,8 @@ const App: React.FC = () => {
       let logs = [...prev.logs];
       logs.unshift(`${pName} ${isDiscard ? '扣了' : '出了'} ${cards.length} 张牌。`);
 
-      if (isTrickOver) {
+      // 只在table刚好从2变成3时触发，避免重复调用
+      if (prev.table.length === 2 && isTrickOver) {
         setTimeout(() => resolveTrick(newTable, newHands), 1200);
       }
 
