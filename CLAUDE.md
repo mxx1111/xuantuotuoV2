@@ -2,239 +2,242 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 项目概览
+## Project Overview
 
-**宣坨坨游戏 V2** - 这是山西吕梁柳林地区传统扑克牌游戏的现代化 H5 版本，使用 React + TypeScript 重构。
+**宣坨坨 (Xuantuotuo)** - A web-based implementation of a traditional poker card game from Liulin, Shanxi Province, China. This is a 3-player game with a unique 24-card deck system featuring special card combinations and betting mechanics.
 
-这是一个3人收牌策略类游戏，支持：
-- 单人 vs AI 对战
-- P2P 多人在线对战（通过 PeerJS）
-- 完整的24张牌体系（卒马相尔曲曲 + 大小王）
-- 星光币虚拟货币系统
+### Technology Stack
 
-## 技术栈
+- **React 19.2.3** - UI framework
+- **TypeScript 5.8.2** - Type safety
+- **Vite 6.2.0** - Build tool and dev server
+- **TailwindCSS** - Styling (via CDN)
+- **PeerJS 1.5.2** - WebRTC-based peer-to-peer networking
+- **Web Audio API** - Sound effects engine
 
-- **前端框架**: React 19.2.3
-- **开发工具**: Vite 7.3.0 + TypeScript 5.7.3
-- **样式方案**: Tailwind CSS 3 (CDN 加载)
-- **P2P 通信**: PeerJS 1.5.2
-- **字体**: Google Fonts (Noto Serif SC + Inter)
-- **模块加载**: ES Modules + Import Maps
-
-## 开发命令
+## Development Commands
 
 ```bash
-# 安装依赖
+# Install dependencies
 npm install
 
-# 启动开发服务器 (默认端口 5173)
+# Start development server (http://localhost:5173)
 npm run dev
 
-# 生产构建
+# Build for production
 npm run build
 
-# 预览构建产物
+# Preview production build
 npm run preview
 ```
 
-## 项目结构
+## Architecture
+
+### Core Game Logic
+
+The game state management is centralized in `App.tsx` using React hooks. The architecture follows a single-source-of-truth pattern where all game state flows through the `GameState` interface.
+
+**Key architectural patterns:**
+
+1. **State Machine**: Game progresses through defined phases (LOBBY → DEALING → BETTING → PLAYING → SETTLEMENT)
+2. **AI Decision Engine**: Separate pure functions in `gameLogic.ts` handle AI behavior
+3. **Networking Layer**: PeerJS handles P2P connections with a host-client model
+4. **Sound Engine**: Custom Web Audio synthesis (no external audio files)
+
+### File Structure
 
 ```
-xauntuotuoV2/
-├── index.html          # 应用入口，包含 Tailwind 配置和动画样式
-├── index.tsx           # React 应用挂载点
-├── App.tsx             # 主应用组件，包含完整游戏 UI 和状态管理
-├── gameLogic.ts        # 核心游戏逻辑和规则引擎
-├── constants.tsx       # 游戏常量（卡牌定义、颜色、配置）
-├── types.ts            # TypeScript 类型定义
-├── components/         # React 组件目录
-├── dist/               # 构建产物目录
-├── vite.config.ts      # Vite 配置
-└── package.json        # 项目依赖和脚本
+├── App.tsx                  # Main game component (1600+ lines)
+│   ├── Game state management
+│   ├── Networking (PeerJS)
+│   ├── AI logic integration
+│   └── UI rendering
+├── types.ts                 # TypeScript interfaces and enums
+│   ├── Card, Play, GameState
+│   ├── GamePhase enum
+│   └── Network message types
+├── gameLogic.ts            # Pure game logic functions
+│   ├── calculatePlayStrength()
+│   ├── getValidPlays()
+│   ├── AI decision functions
+│   └── Reward calculation
+├── constants.tsx           # Deck definition and game constants
+│   └── createDeck() - 24-card deck builder
+├── components/
+│   └── PlayingCard.tsx     # Card rendering component
+├── index.tsx               # React entry point
+├── index.html              # HTML with embedded styles
+└── vite.config.ts          # Vite configuration
 ```
 
-## 核心文件说明
+### Game State Flow
 
-### App.tsx
-- 包含完整的游戏 UI 和所有视图（菜单、游戏、结果）
-- 使用 React Hooks 管理游戏状态
-- 支持 AI 对战和 P2P 在线对战模式
-- 实现了完整的动画系统（发牌、出牌、收牌）
+**Single-Player Mode:**
+- Player vs 2 AI opponents
+- All game logic runs client-side
+- AI uses decision algorithms from `gameLogic.ts`
 
-### gameLogic.ts
-- 游戏核心逻辑引擎
-- 关键函数：
-  - `createDeck()`: 创建24张牌组
-  - `dealCards()`: 发牌逻辑
-  - `isValidPlay()`: 验证出牌是否合法
-  - `canBeat()`: 判断能否压制对方牌
-  - `selectAIPlay()`: AI 自动选牌策略
-  - `calculateGameResult()`: 结算胜负和星光币
+**Multiplayer Mode (P2P):**
+- Host-client architecture via PeerJS
+- Host maintains authoritative game state
+- State synchronized via `broadcast()` function
+- Message types: SYNC_STATE, ACTION_PLAY, ACTION_KOU_LE_INIT, etc.
 
-### constants.tsx
-- 卡牌定义: `CARDS` 数组，包含24张牌的名称、花色、数值、牌力
-- 颜色常量: `CARD_COLORS` - 红黑两色的配色方案
-- 游戏配置: 初始星光币、AI 难度等
+### Card System
 
-### types.ts
-- TypeScript 类型定义
-- 核心类型: `Card`, `Player`, `GameState`, `ViewType`
+The game uses a unique 24-card deck (defined in `constants.tsx`):
+- **卒 (Zu)** - Value 7, Strength 17-18
+- **马 (Ma)** - Value 8, Strength 19-20
+- **相 (Xiang)** - Value 9, Strength 21-22
+- **尔 (Er)** - Value 10, Strength 23-24
+- **曲 (Qu)** - J/Q/K, Strength 14-16
+- **大王/小王 (Jokers)** - Strength 14-16
 
-## 游戏规则概要
+Card strength determines play order. Special combinations:
+- **Pairs**: Same name + same color (strength + 100)
+- **Triples**: Three 曲 of same color (strength + 200)
+- **Special pairs**: 大王+小王 or 红尔+红尔 (strength 125)
 
-### 牌力等级
-红尔(24) > 黑尔(23) > 红相(22) > 黑相(21) > 红马(20) > 黑马(19) > 红卒(18) > 黑卒(17) > 红曲曲(16/15/14) > 黑曲曲(16/15/14) > 大王(13) > 小王(13)
+### AI Implementation
 
-### 收牌标准
-- 不够: <9张，不得分
-- 刚够: 9张，获得1星光币
-- 五了: 15张，获得2星光币
-- 此了: 18张，获得3星光币
+AI decision-making is deterministic based on hand strength scoring:
+- `aiDecidePlay()` - Choose which cards to play
+- `aiDecideBet()` - Betting/grabbing decisions
+- `aiEvaluateKouLe()` - Response to "扣了" (challenge) decisions
 
-### 特殊规则
-- 对子：同数字同颜色才能组成对子
-- 曲曲对：同色的 J、Q、K 任意组合
-- 大小王对：特殊对子，与红尔对不分胜负
+AI evaluates hand strength by counting:
+- Top cards (strength ≥ 22)
+- Valid pairs and triples
+- Collected card count
 
-## 部署相关
+### Sound System
 
-### 构建产物
+Custom sound synthesis using Web Audio API (no external files):
+- `SoundEngine.play(type)` - Generates tones for game events
+- Sound types: deal, play, win, settle, victory, defeat, shuffle, bet, grab
+- Uses oscillators with different waveforms (sine, square, triangle, sawtooth)
+
+## Common Development Patterns
+
+### Adding a New Game Phase
+
+1. Add enum value to `GamePhase` in `types.ts`
+2. Update state machine logic in `App.tsx`
+3. Add UI rendering for the phase
+4. Add network synchronization if needed (in `handleNetworkMessage`)
+
+### Modifying Game Rules
+
+All core game logic is in `gameLogic.ts`. Key functions:
+- `calculatePlayStrength()` - Determines if cards form valid plays
+- `getValidPlays()` - Returns all legal moves
+- `getRewardInfo()` - Maps collected cards to star coin rewards
+
+### Adding Network Messages
+
+1. Define type in `NetworkMessageType` union (types.ts)
+2. Create interface extending `NetworkMessage`
+3. Add handler in `handleNetworkMessage()` function
+4. Use `broadcast()` for host→all or `sendToHost()` for client→host
+
+## Important Notes
+
+### Networking Model
+- **Host** (isHost=true) runs authoritative game state
+- **Clients** receive state updates via SYNC_STATE messages
+- Clients send actions (ACTION_PLAY, ACTION_BET, etc.) to host
+- Host processes actions and broadcasts new state
+
+### State Synchronization
+When modifying game state in multiplayer:
+```typescript
+setGameState(prev => {
+  const newState = { /* updated state */ };
+  if (isHost) broadcast('SYNC_STATE', newState);
+  return newState;
+});
+```
+
+### Development Server
+PeerJS requires HTTPS in production but works with HTTP in development (localhost).
+
+### Import Map
+The project uses an import map in `index.html` for React imports. This is compatible with Vite's module resolution.
+
+## Testing
+
+No automated tests are currently configured. Manual testing workflow:
+1. Start dev server: `npm run dev`
+2. Test single-player: Click "单机模式"
+3. Test multiplayer: Open two browser windows, use Room ID to connect
+4. Verify game phases transition correctly
+5. Check sound effects play on actions
+
+## Building and Deployment
+
 ```bash
 npm run build
-# 构建产物位于 dist/ 目录
-# 包含: index.html, assets/index-[hash].js, assets/index-[hash].css
 ```
 
-### 线上部署 - CSP 配置问题
+Output directory: `dist/`
 
-**重要提示**: 本项目在线上部署时可能遇到 Content Security Policy (CSP) 错误。
+The built app is a static SPA that can be deployed to any static hosting:
+- Vercel, Netlify, GitHub Pages
+- Traditional web servers (nginx, Apache)
+- CDN with static hosting
 
-#### 问题原因
-- `index.html` 中使用了 inline script 配置 Tailwind CSS
-- `index.html` 中使用了 inline style 定义动画
-- 加载了多个 CDN 外部资源（Tailwind、PeerJS、React ESM）
+**Requirements:**
+- Must serve `index.html` for all routes (SPA fallback)
+- PeerJS requires HTTPS in production (or use custom PeerJS server)
 
-#### Nginx CSP 配置方案
+## Configuration
 
-在 Nginx 配置文件中添加以下 CSP 头（根据实际需求调整）：
+### Vite Config (`vite.config.ts`)
+- React plugin enabled
+- Output: `dist/`
+- Sourcemaps disabled in production
 
-**方案 1: 宽松配置（适合开发/测试环境）**
-```nginx
-location /xtt/v2/ {
-    # 允许 inline 脚本和样式
-    add_header Content-Security-Policy "
-        default-src 'self';
-        script-src 'self' 'unsafe-inline' 'unsafe-eval'
-            https://unpkg.com
-            https://cdn.tailwindcss.com
-            https://esm.sh
-            https://fonts.googleapis.com;
-        style-src 'self' 'unsafe-inline'
-            https://fonts.googleapis.com
-            https://cdn.tailwindcss.com;
-        font-src 'self'
-            https://fonts.gstatic.com;
-        connect-src 'self'
-            wss:
-            https:;
-        img-src 'self'
-            data:
-            https:;
-    " always;
+### TypeScript Config (`tsconfig.json`)
+- Target: ES2022
+- JSX: react-jsx
+- Module resolution: bundler
+- Path alias: `@/*` → `./*`
 
-    try_files $uri $uri/ /xtt/v2/index.html;
-}
+### Styling
+TailwindCSS loaded via CDN in `index.html` with custom config:
+- Custom font families: Noto Serif SC, Inter
+- Extended animations for card dealing/playing
+- Custom scrollbar styles
+
+## Code Conventions
+
+### Type Safety
+All game entities are strongly typed via interfaces in `types.ts`. Use type guards when handling network messages or user input.
+
+### Immutability
+State updates use immutable patterns:
+```typescript
+setGameState(prev => ({ ...prev, field: newValue }))
 ```
 
-**方案 2: 中等安全配置（推荐）**
-```nginx
-location /xtt/v2/ {
-    # 使用 nonce 或限制来源
-    add_header Content-Security-Policy "
-        default-src 'self';
-        script-src 'self' 'unsafe-inline'
-            https://unpkg.com
-            https://cdn.tailwindcss.com
-            https://esm.sh;
-        style-src 'self' 'unsafe-inline'
-            https://fonts.googleapis.com;
-        font-src 'self'
-            https://fonts.gstatic.com;
-        connect-src 'self'
-            wss://0.peerjs.com
-            https://*.peerjs.com;
-        img-src 'self' data:;
-    " always;
+### Function Organization
+- **Pure functions** → `gameLogic.ts`
+- **State management** → `App.tsx` (hooks and effects)
+- **UI components** → `components/`
+- **Constants** → `constants.tsx`
 
-    try_files $uri $uri/ /xtt/v2/index.html;
-}
-```
+### Naming Conventions
+- React components: PascalCase
+- Functions: camelCase
+- Constants: UPPER_SNAKE_CASE
+- Type definitions: PascalCase
+- Chinese game terms preserved in logs and UI
 
-**方案 3: 完整 Nginx 配置示例**
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
+## Game-Specific Terminology
 
-    # 静态文件根目录
-    root /var/www/html;
-
-    # 宣坨坨游戏 V2
-    location /xtt/v2/ {
-        alias /var/www/html/xauntuotuoV2/dist/;
-        index index.html;
-
-        # CSP 配置（推荐使用方案2）
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.tailwindcss.com https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss: https:;" always;
-
-        # 其他安全头
-        add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-
-        # 缓存配置
-        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
-            expires 1y;
-            add_header Cache-Control "public, immutable";
-        }
-
-        try_files $uri $uri/ /xtt/v2/index.html;
-    }
-}
-```
-
-## 调试技巧
-
-### 查看 CSP 错误
-在浏览器开发者工具的 Console 中查看 CSP 违规报告，会显示被阻止的资源。
-
-### 验证 Nginx 配置
-```bash
-# 测试配置文件语法
-nginx -t
-
-# 重新加载配置
-nginx -s reload
-
-# 查看错误日志
-tail -f /var/log/nginx/error.log
-```
-
-## API 访问地址
-
-- **开发环境**: `http://localhost:5173`
-- **生产环境**: 根据实际部署路径
-
-## Communication Guidelines
-
-- 所有回答请使用中文
-- 代码注释使用中文
-- 在未允许的情况下，不要主动操作 git
-
-## Coding Guidelines
-
-- 遵循 React Hooks 最佳实践
-- 使用 TypeScript 类型约束
-- 保持组件函数式编程风格
-- CSS 类名优先使用 Tailwind 工具类
-- 游戏逻辑和 UI 逻辑分离
+- **宣坨坨 (Xuantuotuo)**: Game name
+- **扣了 (Kou Le)**: Challenge mechanism where a player can end the round early
+- **抢牌 (Qiang Pai)**: Card grabbing/betting phase
+- **星光币 (Star Coins)**: In-game currency
+- **收牌 (Shou Pai)**: Collecting cards from the table
+- **不够/刚够/五了/此了**: Reward levels based on collected cards (9/15/18 thresholds)
