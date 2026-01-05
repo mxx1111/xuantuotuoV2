@@ -1500,26 +1500,26 @@ const App: React.FC = () => {
             <button onClick={() => setShowRules(true)} className="w-7 h-7 flex items-center justify-center bg-slate-800 rounded-md text-[11px] font-black text-slate-100 active:scale-90 transition-all border border-white/5">规</button>
             <button onClick={() => setShowHistory(true)} className="w-7 h-7 flex items-center justify-center bg-slate-800 rounded-md border border-white/5 font-black text-[11px] chinese-font transition-all active:scale-90 text-slate-100">录</button>
             <div className="text-[9px] font-mono bg-black/60 px-2 py-1 rounded-md border border-white/10 flex items-center gap-1"><span className="text-yellow-500 text-xs">🪙</span><span className="font-bold text-yellow-100">{gameState.starCoins[myPlayerId]}</span></div>
-            <div className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded text-[8px] font-black">已收: {(gameState.collected[myPlayerId] as Card[]).length}</div>
-            <div className="px-2 py-0.5 bg-slate-800 border border-white/10 rounded text-[8px] font-black text-slate-100 flex items-center gap-1">
+            <div className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded text-[9px] font-black">已收: {(gameState.collected[myPlayerId] as Card[]).length}</div>
+            <div className="px-2 py-0.5 bg-slate-800 border border-white/10 rounded text-[9px] font-black text-slate-100 flex items-center gap-1">
               <span>🪪 江湖名</span>
               <span className="text-emerald-300">{displayNickname}</span>
             </div>
           </div>
 
           <div className="flex-1 flex justify-start items-center gap-1 overflow-hidden px-1 min-w-0">
-            <div className="px-1.5 py-0.5 bg-yellow-600/20 border border-yellow-500/30 rounded text-[8px] font-black text-yellow-400 whitespace-nowrap shrink-0">
+            <div className="px-1.5 py-0.5 bg-yellow-600/20 border border-yellow-500/30 rounded text-[9px] font-black text-yellow-400 whitespace-nowrap shrink-0">
               <span>个人倍率</span>
               <span className="ml-0.5">x{gameState.multipliers[myPlayerId]}</span>
             </div>
-            <div className="px-1.5 py-0.5 bg-red-600/20 border border-red-500/30 rounded text-[8px] font-black text-red-400 whitespace-nowrap shrink-0">
+            <div className="px-1.5 py-0.5 bg-red-600/20 border border-red-500/30 rounded text-[9px] font-black text-red-400 whitespace-nowrap shrink-0">
               <span>抢收连锁</span>
               <span className="ml-0.5">x{gameState.grabMultiplier}</span>
             </div>
             {gameState.grabber === myPlayerId && (
-              <div className="px-1.5 py-0.5 bg-red-600/15 border border-red-500/40 rounded text-[8px] font-black text-red-200 whitespace-nowrap shrink-0 flex items-center gap-0.5 shadow-lg animate-pulse">
+              <div className="px-1.5 py-0.5 bg-red-600/15 border border-red-500/40 rounded text-[9px] font-black text-red-200 whitespace-nowrap shrink-0 flex items-center gap-0.5 shadow-lg animate-pulse">
                 <span>🎴 抢收翻倍</span>
-                <span className="text-white text-[7px]">先手</span>
+                <span className="text-white text-[8px]">先手</span>
               </div>
             )}
             {(gameState.challengers[myPlayerId] || 0) > 0 && (
