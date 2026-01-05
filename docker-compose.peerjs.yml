@@ -7,12 +7,12 @@ services:
     restart: unless-stopped
     command: >
       peerjs
-      --port 9809
-      --path /peerjs
+      --port 9909
+      --path /peerjs/
       --key peerjs
       --allow_discovery true
     ports:
-      - "9809:9809"
+      - "9909:9909"
     environment:
       # 当你启用反向代理并终结 TLS 时，需要告诉 PeerJS 接受被代理后的 X-Forwarded-* 头
       - PROXIED=true
