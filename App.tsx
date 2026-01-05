@@ -90,6 +90,7 @@ interface SlotInfo {
 }
 
 const ALL_PLAYER_IDS: PlayerId[] = [PlayerId.PLAYER, PlayerId.AI_LEFT, PlayerId.AI_RIGHT];
+const SEAT_ORDER_CLOCKWISE: PlayerId[] = [PlayerId.PLAYER, PlayerId.AI_RIGHT, PlayerId.AI_LEFT];
 
 const INITIAL_GAME_STATE = (starCoins?: Record<PlayerId, number>): GameState => ({
   phase: GamePhase.LOBBY,
@@ -170,6 +171,7 @@ const App: React.FC = () => {
   const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState<boolean>(false);
   const [showRules, setShowRules] = useState<boolean>(false);
+  const [myNickname, setMyNickname] = useState<string>('');
   
   const [slots, setSlots] = useState<Record<PlayerId, SlotInfo>>({
     [PlayerId.PLAYER]: { type: 'human', name: '房主' },
@@ -204,12 +206,37 @@ const App: React.FC = () => {
   }, []);
 
   const getPlayerName = useCallback((pid: PlayerId) => {
-    if (pid === myPlayerId) return '我';
+    if (pid === myPlayerId) {
+      const trimmed = myNickname.trim();
+      return trimmed ? `我（${trimmed}）` : '我';
+    }
     const slot = slots[pid];
     if (!slot) return '';
     if (slot.type === 'ai') return slot.name || gameState.aiNames[pid] || 'AI';
     return slot.name;
-  }, [myPlayerId, slots, gameState.aiNames]);
+  }, [myPlayerId, slots, gameState.aiNames, myNickname]);
+
+  const orientation = useMemo(() => {
+    const idx = SEAT_ORDER_CLOCKWISE.indexOf(myPlayerId);
+    const safeIdx = idx === -1 ? 0 : idx;
+    const rotate = (offset: number) => SEAT_ORDER_CLOCKWISE[(safeIdx + offset) % SEAT_ORDER_CLOCKWISE.length];
+    const bottom = rotate(0);
+    const topRight = rotate(1);
+    const topLeft = rotate(2);
+    return {
+      bottom,
+      topLeft,
+      topRight,
+      waitingOrder: [topLeft, bottom, topRight] as PlayerId[]
+    };
+  }, [myPlayerId]);
+
+  const displayNickname = useMemo(() => {
+    const trimmed = myNickname.trim();
+    if (trimmed) return trimmed;
+    const slotName = slots[myPlayerId]?.name?.trim();
+    return slotName || '侠客';
+  }, [myNickname, slots, myPlayerId]);
 
   const playerHandSorted = useMemo(() => {
     const hand = [...gameState.hands[myPlayerId]];
@@ -307,6 +334,11 @@ const App: React.FC = () => {
   }, [addLog]);
 
   const joinRoom = useCallback((rawRoomId?: string) => {
+    const trimmedName = myNickname.trim().slice(0, 12);
+    if (!trimmedName) {
+      addLog('⚠️ 请输入你的昵称后再加入房间。');
+      return;
+    }
     const roomId = parseRoomIdInput(rawRoomId ?? targetId);
     if (!roomId) {
       addLog('⚠️ 请输入好友房号或邀请链接。');
@@ -333,7 +365,7 @@ const App: React.FC = () => {
     setGameState(prev => ({ ...prev, phase: GamePhase.WAITING }));
     addLog(`🔗 正在加入房间：${roomId}`);
 
-    const conn = peerRef.current.connect(roomId, { reliable: true });
+    const conn = peerRef.current.connect(roomId, { reliable: true, metadata: { nickname: trimmedName } });
     connectionsRef.current[roomId] = conn;
 
     conn.on('data', (data: NetworkMessage) => handleNetworkMessageRef.current(data, roomId));
@@ -343,7 +375,7 @@ const App: React.FC = () => {
     });
     conn.on('close', () => handlePeerDisconnected(roomId));
     conn.on('error', () => handlePeerDisconnected(roomId));
-  }, [addLog, closeAllConnections, parseRoomIdInput, targetId, handlePeerDisconnected]);
+  }, [addLog, closeAllConnections, parseRoomIdInput, targetId, handlePeerDisconnected, myNickname]);
 
   const getNextRespondents = useCallback((initiator: PlayerId) => {
     const order = [PlayerId.PLAYER, PlayerId.AI_RIGHT, PlayerId.AI_LEFT];
@@ -409,12 +441,27 @@ const App: React.FC = () => {
     return null;
   }, []);
 
-  const handleHostAcceptConnection = useCallback((peerId: string) => {
+  const handleHostAcceptConnection = useCallback((peerId: string, nickname?: string) => {
     if (!isHostRef.current) return;
+
+    const buildNickname = (seat: PlayerId) => {
+      const fallback = seat === PlayerId.AI_LEFT ? '左位侠客' : '右位侠客';
+      if (typeof nickname !== 'string') return fallback;
+      const trimmed = nickname.trim();
+      if (!trimmed) return fallback;
+      return trimmed.slice(0, 12);
+    };
 
     const currentSlots = slotsRef.current;
     const existingSeat = findSeatByPeerId(peerId, currentSlots);
     if (existingSeat) {
+      if (nickname?.trim()) {
+        const finalName = nickname.trim().slice(0, 12);
+        setSlots(prev => ({
+          ...prev,
+          [existingSeat]: { ...prev[existingSeat], name: finalName, peerId },
+        }));
+      }
       sendToPeer(peerId, 'ASSIGN_SEAT', { playerId: existingSeat });
       syncStateToPeer(peerId, existingSeat, gameStateRef.current);
       return;
@@ -428,9 +475,10 @@ const App: React.FC = () => {
       return;
     }
 
+    const resolvedName = buildNickname(availableSeat);
     setSlots(prev => ({
       ...prev,
-      [availableSeat]: { type: 'human', name: `玩家${availableSeat === PlayerId.AI_LEFT ? '左' : '右'}`, peerId },
+      [availableSeat]: { type: 'human', name: resolvedName, peerId },
     }));
 
     sendToPeer(peerId, 'ASSIGN_SEAT', { playerId: availableSeat });
@@ -488,7 +536,7 @@ const App: React.FC = () => {
       conn.on('data', (data: NetworkMessage) => handleNetworkMessageRef.current(data, conn.peer));
       conn.on('open', () => {
         setConnectedPeers(prev => (prev.includes(conn.peer) ? prev : [...prev, conn.peer]));
-        handleHostAcceptConnection(conn.peer);
+        handleHostAcceptConnection(conn.peer, conn.metadata?.nickname);
       });
       conn.on('close', () => handlePeerDisconnected(conn.peer));
       conn.on('error', () => handlePeerDisconnected(conn.peer));
@@ -1075,7 +1123,26 @@ const App: React.FC = () => {
       </div>
 
       <div className="flex flex-col gap-5 landscape:gap-2 w-full max-w-sm animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
-        <button onClick={() => { SoundEngine.init(); closeAllConnections(); setHostPeerId(''); setMyPlayerId(PlayerId.PLAYER); setIsHost(true); setGameState(prev => ({...prev, phase: GamePhase.WAITING})); }} className="group relative overflow-hidden py-6 landscape:py-3 rounded-3xl landscape:rounded-2xl bg-emerald-600 font-black text-2xl landscape:text-lg chinese-font shadow-[0_10px_40px_-10px_rgba(16,185,129,0.5)] active:scale-95 transition-all">
+        <div className="flex flex-col gap-2 bg-slate-900/40 border border-white/5 rounded-3xl landscape:rounded-2xl p-4">
+          <label className="text-[11px] landscape:text-[9px] text-slate-400 font-black tracking-widest uppercase">江湖名</label>
+          <input value={myNickname} onChange={e => setMyNickname(e.target.value.slice(0, 12))} placeholder="请输入让人记得住的外号..." className="bg-slate-950 border border-white/10 rounded-2xl landscape:rounded-xl px-4 py-3 chinese-font font-bold text-emerald-400 placeholder:text-slate-700 focus:border-emerald-500/50 focus:outline-none transition-all" />
+          <p className="text-[10px] landscape:text-[8px] text-slate-500">所有玩家都会在房内看到该昵称。</p>
+        </div>
+        <button onClick={() => { 
+          const trimmed = myNickname.trim().slice(0, 12);
+          if (!trimmed) { addLog('⚠️ 请输入你的昵称后再开设牌局。'); return; }
+          SoundEngine.init(); 
+          closeAllConnections(); 
+          setSlots({
+            [PlayerId.PLAYER]: { type: 'human', name: trimmed },
+            [PlayerId.AI_LEFT]: { type: 'empty', name: '等待加入...' },
+            [PlayerId.AI_RIGHT]: { type: 'empty', name: '等待加入...' },
+          });
+          setHostPeerId(''); 
+          setMyPlayerId(PlayerId.PLAYER); 
+          setIsHost(true); 
+          setGameState(prev => ({...prev, phase: GamePhase.WAITING}));
+        }} className="group relative overflow-hidden py-6 landscape:py-3 rounded-3xl landscape:rounded-2xl bg-emerald-600 font-black text-2xl landscape:text-lg chinese-font shadow-[0_10px_40px_-10px_rgba(16,185,129,0.5)] active:scale-95 transition-all">
           <span className="relative z-10">开 设 牌 局</span>
           <div className="absolute inset-0 bg-gradient-to-tr from-emerald-400/20 to-transparent opacity-0 group-active:opacity-100 transition-opacity"></div>
         </button>
@@ -1187,12 +1254,11 @@ const App: React.FC = () => {
     </div>
   );
 
-  const renderTableSlot = (pid: PlayerId) => {
+  const renderTableSlot = (pid: PlayerId, position: 'left' | 'right' | 'bottom') => {
     const play = gameState.table.find(p => p.playerId === pid);
     if (!play) return <div className="w-9 h-14 md:w-16 md:h-24 rounded-xl border-2 border-dashed border-white/5 flex items-center justify-center text-slate-800 text-[8px] uppercase font-black tracking-tighter">Wait...</div>;
 
-    const isPlayer = pid === PlayerId.PLAYER;
-    const animationClass = pid === PlayerId.PLAYER ? 'play-animation-bottom' : (pid === PlayerId.AI_LEFT ? 'play-animation-left' : 'play-animation-right');
+    const animationClass = position === 'bottom' ? 'play-animation-bottom' : (position === 'left' ? 'play-animation-left' : 'play-animation-right');
 
     return (
       <div className={`flex transition-transform duration-500 ${animationClass}`}>
@@ -1306,14 +1372,16 @@ const App: React.FC = () => {
             <div className="flex flex-col items-center gap-2 mb-10">
                <h2 className="text-2xl font-black chinese-font text-emerald-500">等待备战中...</h2>
                {isHost && (
-                  <button onClick={handleShareRoom} className="px-4 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-black transition-all flex items-center gap-2">🔗 复制房间邀请链接</button>
+                  <div className="flex flex-col items-center gap-1 landscape:flex-row landscape:gap-2">
+                    <button onClick={handleShareRoom} className="px-4 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-black transition-all flex items-center gap-2">🔗 复制房间邀请链接</button>
+                  </div>
                )}
             </div>
             <div className="flex items-center justify-center gap-8 md:gap-24 mb-16">
-              {[PlayerId.AI_LEFT, PlayerId.PLAYER, PlayerId.AI_RIGHT].map(id => (
-                <div key={id} className={`flex flex-col items-center gap-4 ${id === PlayerId.PLAYER ? 'mt-20' : ''}`}>
-                   <div className={`w-20 h-20 md:w-28 md:h-28 rounded-full border-2 flex items-center justify-center text-4xl shadow-2xl transition-all ${id === PlayerId.PLAYER ? 'border-emerald-500 bg-slate-800' : (slots[id].type === 'empty' ? 'border-dashed border-slate-700 bg-slate-900/50 grayscale' : 'border-emerald-500 bg-slate-800')}`}>
-                      {id === PlayerId.PLAYER ? '👤' : (slots[id].type === 'empty' ? '?' : (slots[id].type === 'ai' ? '🤖' : '侠'))}
+              {orientation.waitingOrder.map((id, idx) => (
+                <div key={id} className={`flex flex-col items-center gap-4 ${idx === 1 ? 'mt-8' : ''}`}>
+                   <div className={`w-20 h-20 md:w-28 md:h-28 rounded-full border-2 flex items-center justify-center text-4xl shadow-2xl transition-all ${id === myPlayerId ? 'border-emerald-500 bg-slate-800' : (slots[id].type === 'empty' ? 'border-dashed border-slate-700 bg-slate-900/50 grayscale' : 'border-emerald-500 bg-slate-800')}`}>
+                      {id === myPlayerId ? '👤' : (slots[id].type === 'empty' ? '?' : (slots[id].type === 'ai' ? '🤖' : '侠'))}
                    </div>
                    <div className="text-center">
                       <div className="text-xs font-black text-slate-300 chinese-font">{getPlayerName(id)}</div>
@@ -1340,8 +1408,11 @@ const App: React.FC = () => {
               ))}
             </div>
             {isHost ? (
-               <div className="flex flex-col gap-4 w-full max-sm pb-16 landscape:pb-20">
-                  <button onClick={() => initGame()} disabled={slots[PlayerId.AI_LEFT].type === 'empty' || slots[PlayerId.AI_RIGHT].type === 'empty'} className={`px-20 py-6 rounded-3xl font-black text-2xl transition-all chinese-font shadow-2xl ${slots[PlayerId.AI_LEFT].type !== 'empty' && slots[PlayerId.AI_RIGHT].type !== 'empty' ? 'bg-emerald-600 active:scale-95' : 'bg-slate-800 text-slate-600 opacity-50 cursor-not-allowed'}`}>开 始 游 戏</button>
+               <div className="flex flex-col gap-2 w-full max-sm pb-16 landscape:pb-20">
+                  <button onClick={handleShareRoom} className="py-2.5 px-4 rounded-2xl bg-slate-800 border border-white/10 text-[11px] font-black text-emerald-400 flex items-center justify-center gap-2 active:scale-95 transition-all landscape:w-full">
+                    🔗 分享房间邀请链接
+                  </button>
+                  <button onClick={() => initGame()} disabled={slots[PlayerId.AI_LEFT].type === 'empty' || slots[PlayerId.AI_RIGHT].type === 'empty'} className={`px-14 py-4 rounded-3xl font-black text-xl transition-all chinese-font shadow-2xl ${slots[PlayerId.AI_LEFT].type !== 'empty' && slots[PlayerId.AI_RIGHT].type !== 'empty' ? 'bg-emerald-600 active:scale-95' : 'bg-slate-800 text-slate-600 opacity-50 cursor-not-allowed'}`}>开 始 游 戏</button>
                   <button onClick={quitToLobby} className="py-3 text-slate-500 text-xs font-black transition-all uppercase tracking-widest">解散房间并返回</button>
                </div>
             ) : (<div className="text-emerald-500 animate-pulse font-black chinese-font text-xl">房主正在配置席位...</div>)}
@@ -1371,6 +1442,10 @@ const App: React.FC = () => {
             <button onClick={() => setShowHistory(true)} className="w-7 h-7 flex items-center justify-center bg-slate-800 rounded-md border border-white/5 font-black text-[11px] chinese-font transition-all active:scale-90 text-slate-300">录</button>
             <div className="text-[9px] font-mono bg-black/60 px-2 py-1 rounded-md border border-white/10 flex items-center gap-1"><span className="text-yellow-500 text-xs">🪙</span><span className="font-bold text-yellow-100">{gameState.starCoins[myPlayerId]}</span></div>
             <div className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded text-[8px] font-black">已收: {(gameState.collected[myPlayerId] as Card[]).length}</div>
+            <div className="px-2 py-0.5 bg-slate-800 border border-white/10 rounded text-[8px] font-black text-slate-200 flex items-center gap-1">
+              <span>🪪 江湖名</span>
+              <span className="text-emerald-300">{displayNickname}</span>
+            </div>
           </div>
 
           <div className="flex-1 flex justify-start items-center gap-1 overflow-hidden px-1 min-w-0">
@@ -1402,8 +1477,8 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex-1 relative flex items-center justify-center py-8 landscape:py-4">
-          {[PlayerId.AI_LEFT, PlayerId.AI_RIGHT].map(id => (
-            <div key={id} className={`absolute top-8 ${id === PlayerId.AI_LEFT ? 'left-4' : 'right-4'} flex flex-col items-center gap-2 z-30`}>
+          {[orientation.topLeft, orientation.topRight].map((id, idx) => (
+            <div key={id} className={`absolute top-8 ${idx === 0 ? 'left-4' : 'right-4'} flex flex-col items-center gap-2 z-30`}>
               <div className="relative">
                 <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl border-2 bg-slate-900 flex items-center justify-center text-2xl md:text-3xl shadow-2xl transition-all duration-500 ${gameState.turn === id && gameState.phase === GamePhase.PLAYING ? 'border-emerald-500 ring-4 ring-emerald-500/20 scale-110' : 'border-white/10'}`}>{slots[id].type === 'human' ? '侠' : (slots[id].type === 'ai' ? '🤖' : '👴')}</div>
                 
@@ -1441,7 +1516,11 @@ const App: React.FC = () => {
               </div>
             </div>
           ))}
-          <div className="absolute top-2 left-0 right-0 flex items-center justify-center gap-3 md:gap-24 z-20 w-full max-w-5xl px-2 scale-90 md:scale-100 mx-auto">{renderTableSlot(PlayerId.AI_LEFT)}{renderTableSlot(PlayerId.PLAYER)}{renderTableSlot(PlayerId.AI_RIGHT)}</div>
+          <div className="absolute top-2 left-0 right-0 flex items-center justify-center gap-3 md:gap-24 z-20 w-full max-w-5xl px-2 scale-90 md:scale-100 mx-auto">
+            {renderTableSlot(orientation.topLeft, 'left')}
+            {renderTableSlot(orientation.bottom, 'bottom')}
+            {renderTableSlot(orientation.topRight, 'right')}
+          </div>
           
           {gameState.phase === GamePhase.KOU_LE_DECISION && (
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-6 animate-in fade-in">
