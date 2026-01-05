@@ -36,6 +36,13 @@ export interface Play {
   strength: number;
 }
 
+export interface KouLeChallengeEvent {
+  initiator: PlayerId;
+  challenger: PlayerId;
+  challengerCollectedAtChallenge: number;
+  targetCollected: number; // 9/15/18：宣后期望达到的下一档
+}
+
 export interface GameState {
   phase: GamePhase;
   hands: Record<PlayerId, Card[]>;
@@ -44,8 +51,10 @@ export interface GameState {
   turn: PlayerId;
   starter: PlayerId;
   starCoins: Record<PlayerId, number>;
-  kouLeInitiator: PlayerId | null;
-  challengers: Record<PlayerId, number>; 
+  kouLeInitiator: PlayerId | null; // 当前正在进行的扣了发起者（仅在KOU_LE_DECISION阶段非空）
+  challengers: Record<PlayerId, number>; // 本局内累计“宣”次数（用于UI展示）
+  kouLeHistory: KouLeChallengeEvent[]; // 本局内所有“宣”的目标记录（用于结算）
+  kouLeUsedThisTrick: boolean; // 本轮(当前一墩)是否已发起过“扣了”
   kouLeResponses: Record<PlayerId, 'agree' | 'challenge' | null>;
   logs: string[];
   aiNames: Record<string, string>;

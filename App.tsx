@@ -9,6 +9,7 @@ import {
 import { 
   calculatePlayStrength, getValidPlays, getRewardInfo, 
   aiDecidePlay, aiEvaluateKouLe, aiDecideBet,
+  getKouLeChallengeTarget,
   checkNoXiang 
 } from './gameLogic';
 import PlayingCard from './components/PlayingCard';
@@ -98,6 +99,8 @@ const INITIAL_GAME_STATE = (starCoins?: Record<PlayerId, number>): GameState => 
   starCoins: starCoins || { [PlayerId.PLAYER]: INITIAL_STAR_COINS, [PlayerId.AI_LEFT]: INITIAL_STAR_COINS, [PlayerId.AI_RIGHT]: INITIAL_STAR_COINS },
   kouLeInitiator: null,
   challengers: { [PlayerId.PLAYER]: 0, [PlayerId.AI_LEFT]: 0, [PlayerId.AI_RIGHT]: 0 },
+  kouLeHistory: [],
+  kouLeUsedThisTrick: false,
   kouLeResponses: { [PlayerId.PLAYER]: null, [PlayerId.AI_LEFT]: null, [PlayerId.AI_RIGHT]: null },
   logs: ['系统: 宣坨坨已就绪。'],
   aiNames: { [PlayerId.AI_LEFT]: 'AI 左', [PlayerId.AI_RIGHT]: 'AI 右' },
@@ -262,27 +265,26 @@ const App: React.FC = () => {
       }
     });
 
-    if (gameState.kouLeInitiator) {
-      const initiatorStat = stats.find(s => s.id === gameState.kouLeInitiator)!;
-      const initiatorRes = results.find(r => r.id === gameState.kouLeInitiator)!;
-      if (initiatorStat.coins > 0) {
-        Object.entries(gameState.challengers).forEach(([chalId, val]) => {
-          const chalCount = val as number;
-          if (chalCount > 0) {
-            const chalStat = stats.find(s => s.id === chalId)!;
-            const chalRes = results.find(r => r.id === chalId)!;
-            if (chalStat.coins === 0) {
-              const riskAmount = (initiatorStat.coins * initiatorRes.finalMultiplier) * 2 * chalCount; 
-              chalRes.netGain -= riskAmount;
-              chalRes.multiplier = chalCount * 2;
-              initiatorRes.netGain += riskAmount;
-            }
-          }
-        });
-      }
-    }
+    // “扣了/宣”额外结算：
+    // 若有人在某次扣了后选择“宣”，则等同于承诺把自己的档位升到下一档；
+    // 若最终没达到目标档位，且当次扣了发起者(A)最终赢(>=9)，则宣的人需按A倍率赔付星光币给A。
+    gameState.kouLeHistory.forEach(evt => {
+      const initiatorStat = stats.find(s => s.id === evt.initiator);
+      const initiatorRes = results.find(r => r.id === evt.initiator);
+      const challengerStat = stats.find(s => s.id === evt.challenger);
+      const challengerRes = results.find(r => r.id === evt.challenger);
+      if (!initiatorStat || !initiatorRes || !challengerStat || !challengerRes) return;
+      if (initiatorStat.coins <= 0) return; // A 不够则不触发额外赔付
+
+      const reachedTarget = challengerStat.cards >= evt.targetCollected;
+      if (reachedTarget) return;
+
+      const riskAmount = (initiatorStat.coins * initiatorRes.finalMultiplier) * 2;
+      challengerRes.netGain -= riskAmount;
+      initiatorRes.netGain += riskAmount;
+    });
     return results;
-  }, [gameState.collected, gameState.kouLeInitiator, gameState.challengers, gameState.aiNames, gameState.multipliers, gameState.grabMultiplier]);
+  }, [gameState.collected, gameState.kouLeHistory, gameState.aiNames, gameState.multipliers, gameState.grabMultiplier]);
 
   // 更新星光币并在结算时播放声音
   useEffect(() => {
@@ -339,6 +341,8 @@ const App: React.FC = () => {
           table: [], turn: starter, starter: starter, roundHistory: [],
           kouLeInitiator: null, 
           challengers: { [PlayerId.PLAYER]: 0, [PlayerId.AI_LEFT]: 0, [PlayerId.AI_RIGHT]: 0 },
+          kouLeHistory: [],
+          kouLeUsedThisTrick: false,
           kouLeResponses: { [PlayerId.PLAYER]: null, [PlayerId.AI_LEFT]: null, [PlayerId.AI_RIGHT]: null },
           multipliers: { [PlayerId.PLAYER]: 1, [PlayerId.AI_LEFT]: 1, [PlayerId.AI_RIGHT]: 1 },
           grabber: null, grabMultiplier: 1, betTurn: starter,
@@ -386,12 +390,12 @@ const App: React.FC = () => {
 
       if (Object.values(currentHands).every((h: any) => h.length === 0)) {
         nextPhase = GamePhase.SETTLEMENT;
-        const newState = { ...prev, collected: newCollected, logs: newLogs.slice(0, 30), phase: nextPhase, roundHistory, turn: nextTurn, starter: nextStarter, table: [] };
+        const newState = { ...prev, collected: newCollected, logs: newLogs.slice(0, 30), phase: nextPhase, roundHistory, turn: nextTurn, starter: nextStarter, table: [], kouLeUsedThisTrick: false };
         if (isHost) broadcast('SYNC_STATE', newState);
         return newState;
       }
       
-      const newState = { ...prev, collected: newCollected, logs: newLogs.slice(0, 30), roundHistory, turn: nextTurn, starter: nextStarter, table: [] };
+      const newState = { ...prev, collected: newCollected, logs: newLogs.slice(0, 30), roundHistory, turn: nextTurn, starter: nextStarter, table: [], kouLeUsedThisTrick: false };
       if (isHost) broadcast('SYNC_STATE', newState);
       return newState;
     });
@@ -438,10 +442,17 @@ const App: React.FC = () => {
 
   const processInitiateKouLe = useCallback((pid: PlayerId) => {
     setGameState(prev => {
+      if (prev.phase !== GamePhase.PLAYING) return prev;
+      if (prev.table.length !== 0) return prev;
+      if (prev.turn !== pid) return prev;
+      if (prev.kouLeInitiator !== null) return prev; // 避免重复发起
+      if (prev.kouLeUsedThisTrick) return prev; // 同一墩只允许发起一次“扣了”
+
       const newState = { 
         ...prev, 
         phase: GamePhase.KOU_LE_DECISION, 
         kouLeInitiator: pid, 
+        kouLeUsedThisTrick: true,
         kouLeResponses: { [PlayerId.PLAYER]: null, [PlayerId.AI_LEFT]: null, [PlayerId.AI_RIGHT]: null },
         logs: [`📣 ${pid === PlayerId.PLAYER ? '您' : getPlayerName(pid)} 发起了“扣了”博弈！`, ...prev.logs].slice(0, 30)
       };
@@ -452,21 +463,43 @@ const App: React.FC = () => {
 
   const processKouLeResponse = useCallback((pid: PlayerId, response: 'agree' | 'challenge') => {
     setGameState(prev => {
+      if (prev.phase !== GamePhase.KOU_LE_DECISION) return prev;
+      const initiator = prev.kouLeInitiator;
+      if (!initiator) return prev;
+
+      const respondents = getNextRespondents(initiator);
+      const currentDecider = respondents.find(id => prev.kouLeResponses[id] === null);
+      if (currentDecider !== pid) return prev;
+      if (prev.kouLeResponses[pid] !== null) return prev;
+
       const newResponses = { ...prev.kouLeResponses, [pid]: response };
       const newChallengers = { ...prev.challengers };
-      if (response === 'challenge') {
-        newChallengers[pid] = (newChallengers[pid] || 0) + 1;
-      }
 
       const pName = pid === PlayerId.PLAYER ? '您' : getPlayerName(pid);
       const logs = [`${pName} 选择了 ${response === 'agree' ? '同意(扣了)' : '宣(挑战)'}`, ...prev.logs];
 
-      const initiator = prev.kouLeInitiator!;
-      const respondents = getNextRespondents(initiator);
-
       if (response === 'challenge') {
+        newChallengers[pid] = (newChallengers[pid] || 0) + 1;
+
+        const challengerCollectedAtChallenge = (prev.collected[pid] as Card[]).length;
+        const { targetCollected, targetLevel } = getKouLeChallengeTarget(challengerCollectedAtChallenge);
+        const newHistory = [
+          ...prev.kouLeHistory,
+          { initiator, challenger: pid, challengerCollectedAtChallenge, targetCollected }
+        ];
+
+        logs.unshift(`🎯 ${pName} 宣：目标【${targetLevel}】(需收牌≥${targetCollected}张)`);
         logs.unshift('⚔️ 有人选择“宣”，博弈达成，游戏继续！');
-        const nextS = { ...prev, kouLeResponses: newResponses, challengers: newChallengers, logs: logs.slice(0, 30), phase: GamePhase.PLAYING };
+
+        const nextS = { 
+          ...prev, 
+          kouLeInitiator: null,
+          kouLeResponses: { [PlayerId.PLAYER]: null, [PlayerId.AI_LEFT]: null, [PlayerId.AI_RIGHT]: null },
+          challengers: newChallengers,
+          kouLeHistory: newHistory,
+          logs: logs.slice(0, 30), 
+          phase: GamePhase.PLAYING 
+        };
         if (isHost) broadcast('SYNC_STATE', nextS);
         return nextS;
       }
@@ -478,13 +511,25 @@ const App: React.FC = () => {
           const anyWinner = Object.values(prev.collected).some((cards: any) => cards.length >= 9);
           if (anyWinner) {
             logs.unshift('🔄 全员同意“扣了”，已有玩家达标，直接进入结算。');
-            const nextS = { ...prev, kouLeResponses: newResponses, logs: logs.slice(0, 30), phase: GamePhase.SETTLEMENT };
+            const nextS = { 
+              ...prev, 
+              kouLeInitiator: null,
+              kouLeResponses: { [PlayerId.PLAYER]: null, [PlayerId.AI_LEFT]: null, [PlayerId.AI_RIGHT]: null },
+              logs: logs.slice(0, 30), 
+              phase: GamePhase.SETTLEMENT 
+            };
             if (isHost) broadcast('SYNC_STATE', nextS);
             return nextS;
           } else {
             logs.unshift('🔄 全员同意“扣了”，且无人达标，重新发牌。');
             setTimeout(() => initGame(prev.starter), 1500);
-            const nextS = { ...prev, kouLeResponses: newResponses, logs: logs.slice(0, 30), phase: GamePhase.DEALING };
+            const nextS = { 
+              ...prev, 
+              kouLeInitiator: null,
+              kouLeResponses: { [PlayerId.PLAYER]: null, [PlayerId.AI_LEFT]: null, [PlayerId.AI_RIGHT]: null },
+              logs: logs.slice(0, 30), 
+              phase: GamePhase.DEALING 
+            };
             if (isHost) broadcast('SYNC_STATE', nextS);
             return nextS;
           }
@@ -857,8 +902,9 @@ const App: React.FC = () => {
     return gameState.phase === GamePhase.PLAYING && 
            gameState.turn === PlayerId.PLAYER && 
            gameState.table.length === 0 && 
-           gameState.kouLeInitiator === null;
-  }, [gameState.phase, gameState.turn, gameState.table.length, gameState.kouLeInitiator]);
+           gameState.kouLeInitiator === null &&
+           !gameState.kouLeUsedThisTrick;
+  }, [gameState.phase, gameState.turn, gameState.table.length, gameState.kouLeInitiator, gameState.kouLeUsedThisTrick]);
 
   return (
     <div className="h-screen w-full flex flex-col bg-slate-950 text-slate-100 overflow-hidden relative">

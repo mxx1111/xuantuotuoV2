@@ -147,14 +147,32 @@ export const aiDecideBet = (hand: Card[], currentGrabMultiplier: number, grabber
   return { multiplier, grab: wantGrab };
 };
 
+/**
+ * “宣”的目标：基于当前已收牌数，承诺把档位升到下一档
+ * - 不够(<9) -> 目标刚够(>=9)
+ * - 刚够(9-14) -> 目标五了(>=15)
+ * - 五了(15-17) -> 目标此了(>=18)
+ * - 此了(>=18) -> 仍为此了(>=18)
+ */
+export const getKouLeChallengeTarget = (collectedCount: number): { targetCollected: number; targetLevel: RewardLevel } => {
+  if (collectedCount < 9) return { targetCollected: 9, targetLevel: RewardLevel.GANG_GOU };
+  if (collectedCount < 15) return { targetCollected: 15, targetLevel: RewardLevel.WU_LE };
+  return { targetCollected: 18, targetLevel: RewardLevel.CI_LE };
+};
+
 export const aiEvaluateKouLe = (hand: Card[], collectedCount: number): 'agree' | 'challenge' => {
   const topCardsCount = hand.filter(c => c.strength >= 22).length;
   const pairCount = getValidPlays(hand, null).filter(p => p.length === 2).length;
+  const tripleCount = getValidPlays(hand, null).filter(p => p.length === 3).length;
   
-  if (topCardsCount >= 2 || (collectedCount >= 6 && pairCount >= 2) || collectedCount >= 9) {
-    return 'challenge';
-  }
-  return 'agree';
+  const { targetCollected } = getKouLeChallengeTarget(collectedCount);
+  const need = Math.max(0, targetCollected - collectedCount);
+  if (need <= 0) return 'agree';
+
+  const score = topCardsCount * 2 + pairCount + tripleCount * 3;
+  // 离目标越近，越敢宣；离得越远，需要更强手牌
+  const threshold = need <= 3 ? 4 : need <= 6 ? 6 : 8;
+  return score >= threshold ? 'challenge' : 'agree';
 };
 
 export const checkNoXiang = (hand: Card[]): boolean => {
