@@ -138,28 +138,6 @@ const App: React.FC = () => {
     setIsTouchDevice(Boolean(touchDetected));
   }, []);
 
-  const refreshAiNames = useCallback(() => {
-    setSlots(prev => {
-      const next = { ...prev };
-      const usedNames = Object.values(prev)
-        .filter(slot => slot.type === 'human')
-        .map(slot => slot.name);
-      const updated: Partial<Record<PlayerId, string>> = {};
-      [PlayerId.AI_LEFT, PlayerId.AI_RIGHT].forEach(pid => {
-        if (next[pid].type === 'ai') {
-          const fresh = pickAiName(usedNames);
-          usedNames.push(fresh);
-          next[pid] = { ...next[pid], name: fresh };
-          updated[pid] = fresh;
-        }
-      });
-      if (Object.keys(updated).length > 0) {
-        setGameState(gs => ({ ...gs, aiNames: { ...gs.aiNames, ...updated } }));
-      }
-      return next;
-    });
-  }, [setSlots, setGameState]);
-
   const getPlayerName = useCallback((pid: PlayerId) => {
     const slot = slots[pid];
     if (!slot) return '';
@@ -297,7 +275,6 @@ const App: React.FC = () => {
 
   const initGame = useCallback((preservedStarter?: PlayerId) => {
     if (!isHost) return;
-    refreshAiNames();
     setGameState(prev => {
       const s = { ...prev, phase: GamePhase.DEALING };
       broadcast('SYNC_STATE', s);
@@ -336,7 +313,7 @@ const App: React.FC = () => {
       });
       SoundEngine.play('deal');
       }, 2000);
-  }, [isHost, broadcast, addLog, refreshAiNames, getPlayerName]);
+  }, [isHost, broadcast, addLog, getPlayerName]);
 
   const resolveTrick = useCallback((currentTable: Play[], currentHands: Record<PlayerId, Card[]>) => {
     setGameState(prev => {
