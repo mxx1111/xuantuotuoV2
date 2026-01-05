@@ -1148,28 +1148,28 @@ const App: React.FC = () => {
     <div className="absolute inset-0 z-[500] bg-slate-950 flex flex-col items-center justify-start landscape:justify-center p-6 landscape:p-3 landscape:py-2 pt-14 md:pt-24 landscape:pt-6 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] overflow-y-auto custom-scrollbar">
       <div className="text-center mt-6 mb-10 landscape:mt-2 landscape:mb-3 animate-in fade-in slide-in-from-top-10 duration-1000">
         <h1 className="text-7xl landscape:text-4xl font-black chinese-font text-emerald-500 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] mb-2 landscape:mb-1 leading-tight py-4 landscape:py-1">宣 坨 坨</h1>
-        <p className="text-slate-300 uppercase tracking-[0.3em] text-xs landscape:text-[10px] font-bold">Traditional Shanxi Strategy Game</p>
+        <p className="text-slate-300 uppercase tracking-[0.3em] text-base landscape:text-sm font-bold">Traditional Shanxi Strategy Game</p>
       </div>
 
       <div className="w-full max-w-6xl flex flex-col gap-6 items-center md:flex-row md:items-start md:justify-center md:gap-10">
         <div className="order-2 md:order-1 w-full max-w-xs md:max-w-none md:basis-[14rem] md:flex-none flex justify-center md:justify-end">
           <div className="w-full md:w-[14rem] bg-slate-950/60 border border-white/10 rounded-[1.75rem] p-5 landscape:p-4 flex flex-col gap-4 shadow-[0_20px_45px_-30px_rgba(14,165,233,0.35)]">
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.35em] font-black text-slate-300">
+            <div className="flex items-center gap-2 text-sm uppercase tracking-[0.35em] font-black text-slate-300">
               <span className="text-emerald-400 text-lg">⇄</span>
               加入房间
             </div>
-            <p className="text-[11px] landscape:text-[9px] text-slate-300 leading-relaxed">需先设置江湖名，再通过按钮输入房号或邀请链接加入。</p>
+            <p className="text-sm landscape:text-xs text-slate-400 leading-relaxed">需先设置江湖名，再通过按钮输入房号或邀请链接加入。</p>
             <button onClick={() => setShowJoinModal(true)} disabled={!isNicknameReady} className="w-full bg-gradient-to-r from-cyan-500/80 to-emerald-500/80 text-slate-900 font-black chinese-font text-sm rounded-2xl py-2.5 transition-all hover:from-cyan-400/90 hover:to-emerald-400/90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">输入房号加入</button>
-            <p className="text-[10px] landscape:text-[8px] text-slate-300">昵称填写后才能加入牌局。</p>
+            <p className="text-xs landscape:text-[11px] text-slate-400">昵称填写后才能加入牌局。</p>
           </div>
         </div>
 
         <div className="order-1 md:order-2 flex justify-center w-full max-w-md">
           <div className="flex flex-col gap-5 landscape:gap-2 w-full animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
             <div className="flex flex-col gap-2 bg-slate-900/40 border border-white/5 rounded-3xl landscape:rounded-2xl p-4 shadow-[0_25px_60px_-40px_rgba(15,118,110,0.7)]">
-              <label className="text-sm landscape:text-[11px] text-slate-300 font-black tracking-[0.45em] uppercase flex items-center gap-1">江湖名<span className="text-red-500 text-base" aria-hidden="true">*</span></label>
+              <label className="text-sm landscape:text-[11px] text-slate-200 font-black tracking-[0.45em] uppercase flex items-center gap-1">江湖名<span className="text-red-500 text-base" aria-hidden="true">*</span></label>
               <input value={myNickname} onChange={e => setMyNickname(e.target.value.slice(0, 12))} placeholder="请输入让人记得住的外号..." required aria-required="true" aria-invalid={!isNicknameReady} className="bg-slate-950 border border-white/10 rounded-2xl landscape:rounded-xl px-4 py-3 chinese-font font-bold text-emerald-400 placeholder:text-slate-700 focus:border-emerald-500/50 focus:outline-none transition-all" />
-              <p className="text-[10px] landscape:text-[8px] text-slate-300">所有玩家都会在房内看到该昵称。</p>
+              <p className="text-xs landscape:text-[11px] text-slate-400">所有玩家都会在房内看到该昵称。</p>
             </div>
             <button onClick={() => { 
               const trimmed = normalizedNickname;
@@ -1189,18 +1189,18 @@ const App: React.FC = () => {
               <span className="relative z-10">开 设 牌 局</span>
               <div className="absolute inset-0 bg-gradient-to-tr from-emerald-400/20 to-transparent opacity-0 group-active:opacity-100 transition-opacity"></div>
             </button>
-            <button onClick={() => setShowRules(true)} className="py-4 landscape:py-2 text-slate-300 font-black transition-all uppercase tracking-widest text-xs landscape:text-[10px]">查看游戏规则</button>
+            <button onClick={() => setShowRules(true)} className="py-4 landscape:py-2 text-slate-200 font-black transition-all uppercase tracking-widest text-sm landscape:text-xs">查看游戏规则</button>
           </div>
         </div>
 
         <div className="order-3 w-full max-w-xs md:max-w-none md:basis-[14rem] md:flex-none flex justify-center md:justify-start">
           <div className="w-full md:w-[14rem] bg-slate-950/60 border border-white/10 rounded-[1.75rem] p-5 landscape:p-4 flex flex-col gap-3 shadow-[0_20px_45px_-30px_rgba(16,185,129,0.5)]">
-            <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] font-black text-slate-300">
+            <div className="flex items-center justify-between text-sm uppercase tracking-[0.35em] font-black text-slate-200">
               <span>我的房号</span>
-              <span className="text-slate-300">{myId ? '可分享' : '待生成'}</span>
+              <span className="text-slate-400">{myId ? '可分享' : '待生成'}</span>
             </div>
             <div className="text-emerald-400 font-mono font-black text-4xl text-center py-1">{myId || '——'}</div>
-            <p className="text-[11px] landscape:text-[9px] text-slate-300">{myId ? '复制房号或分享链接，好友即可从左侧加入。' : '完成昵称并开设牌局后将生成房号。'}</p>
+            <p className="text-sm landscape:text-xs text-slate-400">{myId ? '复制房号或分享链接，好友即可从左侧加入。' : '完成昵称并开设牌局后将生成房号。'}</p>
             <button onClick={handleShareRoom} disabled={!myId} className="w-full bg-slate-900/70 border border-emerald-500/40 rounded-2xl py-2.5 text-sm font-black text-emerald-300 transition-all hover:bg-slate-900/90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-slate-900/70">📋 复制分享</button>
           </div>
         </div>
@@ -1216,14 +1216,14 @@ const App: React.FC = () => {
             <p className="text-xs uppercase tracking-[0.3em] text-emerald-400 font-black">加入好友</p>
             <h2 className="text-2xl font-black chinese-font text-slate-100 mt-1">输入房号或邀请链接</h2>
           </div>
-          <button onClick={() => setShowJoinModal(false)} className="text-slate-300 hover:text-slate-300 text-2xl leading-none">✕</button>
+          <button onClick={() => setShowJoinModal(false)} className="text-slate-100 hover:text-slate-100 text-2xl leading-none">✕</button>
         </div>
         <p className="text-sm text-slate-400 mb-4">可直接粘贴好友分享的链接，我们会自动识别其中的房号。</p>
         <div className="flex gap-3 mb-3">
           <input value={targetId} onChange={e => setTargetId(e.target.value)} placeholder="例如：1234 或 https://..." className="flex-1 bg-slate-950 border border-white/10 rounded-2xl px-4 py-3 font-bold text-emerald-400 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none transition-all" />
           <button onClick={() => joinRoom()} disabled={!isNicknameReady} className="px-5 py-3 rounded-2xl bg-emerald-600 font-black text-white text-base transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">加入</button>
         </div>
-        <p className="text-[11px] text-slate-300">提示：加入前请先设置昵称；若好友房间号过期，请让对方重新开局。</p>
+        <p className="text-[11px] text-slate-400">提示：加入前请先设置昵称；若好友房间号过期，请让对方重新开局。</p>
       </div>
     </div>
   );
@@ -1233,7 +1233,7 @@ const App: React.FC = () => {
       <div className="bg-slate-900 border border-emerald-500/30 p-8 landscape:p-5 rounded-[2rem] max-w-4xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         <h2 className="text-3xl font-black chinese-font text-emerald-500 mb-6 flex justify-between items-center shrink-0">
           <span>对局实录</span>
-          <button onClick={() => setShowHistory(false)} className="text-slate-300">✕</button>
+          <button onClick={() => setShowHistory(false)} className="text-slate-100">✕</button>
         </h2>
         <div className="flex-1 overflow-y-auto custom-scrollbar pr-1.5 space-y-4">
           {gameState.roundHistory.length === 0 ? (
@@ -1244,7 +1244,7 @@ const App: React.FC = () => {
               return (
                 <div key={tidx} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col gap-3">
                   <div className="flex justify-between items-center border-b border-white/5 pb-2 flex-wrap gap-2">
-                    <span className="text-xs font-black text-slate-300 uppercase">第 {tidx + 1} 轮</span>
+                    <span className="text-xs font-black text-slate-100 uppercase">第 {tidx + 1} 轮</span>
                     <span className="text-xs font-black text-emerald-500 chinese-font">赢家: {getPlayerName(winner)}</span>
                   </div>
                   <div className="overflow-x-auto custom-scrollbar pb-1.5">
@@ -1252,11 +1252,11 @@ const App: React.FC = () => {
                       {trick.map((p, pidx) => (
                         <div key={pidx} className="bg-slate-900/40 rounded-2xl border border-white/5 p-3 flex flex-col gap-2 min-w-[140px]">
                           <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-black text-slate-200 truncate">{getPlayerName(p.playerId)}</span>
-                            <span className="text-[9px] text-slate-300 uppercase whitespace-nowrap">{p.type === 'discard' ? '扣牌' : `${p.cards.length} 张`}</span>
+                          <span className="text-sm font-black text-slate-100 truncate">{getPlayerName(p.playerId)}</span>
+                            <span className="text-[9px] text-slate-100 uppercase whitespace-nowrap">{p.type === 'discard' ? '扣牌' : `${p.cards.length} 张`}</span>
                           </div>
                           {p.type === 'discard' ? (
-                            <div className="w-full py-2 text-center text-[11px] text-slate-300 border border-dashed border-white/10 rounded-lg">
+                            <div className="w-full py-2 text-center text-[11px] text-slate-100 border border-dashed border-white/10 rounded-lg">
                               无出牌
                             </div>
                           ) : (
@@ -1287,9 +1287,9 @@ const App: React.FC = () => {
       <div className="bg-slate-900 border border-emerald-500/30 p-8 rounded-[2rem] max-w-2xl w-full max-h-[80vh] overflow-y-auto custom-scrollbar shadow-2xl">
         <h2 className="text-3xl font-black chinese-font text-emerald-500 mb-6 border-b border-white/5 pb-4 flex justify-between items-center">
           <span>宣坨坨 玩法规则</span>
-          <button onClick={() => setShowRules(false)} className="text-slate-300">✕</button>
+          <button onClick={() => setShowRules(false)} className="text-slate-100">✕</button>
         </h2>
-        <div className="space-y-6 text-slate-300 leading-relaxed font-medium">
+        <div className="space-y-6 text-slate-100 leading-relaxed font-medium">
           <section>
             <h3 className="text-emerald-400 font-black mb-2 flex items-center gap-2">🔹 牌组构成</h3>
             <p>共24张牌：红黑卒(7)、马(8)、相(9)、尔(10)、曲(JQK)、大王(RJ)、小王(SJ)。每人起手8张。</p>
@@ -1348,10 +1348,10 @@ const App: React.FC = () => {
           </div>
           
           <div className="mb-6">
-            <div className="text-slate-400 text-xs uppercase tracking-widest mb-2">当前倍率</div>
+            <div className="text-slate-100 text-xs uppercase tracking-widest mb-2">当前倍率</div>
             <div className="flex justify-center gap-4">
                <div className="bg-black/40 px-4 py-2 rounded-xl border border-white/5">
-                 <span className="text-[10px] text-slate-300 block">全局抢牌</span>
+                 <span className="text-[10px] text-slate-100 block">全局抢牌</span>
                  <span className="text-xl font-black text-emerald-400">x{gameState.grabMultiplier}</span>
                </div>
                {gameState.grabber && (
@@ -1443,7 +1443,7 @@ const App: React.FC = () => {
                       {id === myPlayerId ? '👤' : (slots[id].type === 'empty' ? '?' : (slots[id].type === 'ai' ? '🤖' : '侠'))}
                    </div>
                    <div className="text-center">
-                      <div className="text-xs font-black text-slate-300 chinese-font">{getPlayerName(id)}</div>
+                      <div className="text-xs font-black text-slate-100 chinese-font">{getPlayerName(id)}</div>
                       <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-yellow-500 mt-1">
                         🪙 {gameState.starCoins[id]}
                       </div>
@@ -1472,7 +1472,7 @@ const App: React.FC = () => {
                     🔗 分享房间邀请链接
                   </button>
                   <button onClick={() => initGame()} disabled={slots[PlayerId.AI_LEFT].type === 'empty' || slots[PlayerId.AI_RIGHT].type === 'empty'} className={`px-14 py-4 rounded-3xl font-black text-xl transition-all chinese-font shadow-2xl ${slots[PlayerId.AI_LEFT].type !== 'empty' && slots[PlayerId.AI_RIGHT].type !== 'empty' ? 'bg-emerald-600 active:scale-95' : 'bg-slate-800 text-slate-600 opacity-50 cursor-not-allowed'}`}>开 始 游 戏</button>
-                  <button onClick={quitToLobby} className="py-3 text-slate-300 text-xs font-black transition-all uppercase tracking-widest">解散房间并返回</button>
+                  <button onClick={quitToLobby} className="py-3 text-slate-100 text-xs font-black transition-all uppercase tracking-widest">解散房间并返回</button>
                </div>
             ) : (<div className="text-emerald-500 animate-pulse font-black chinese-font text-xl">房主正在配置席位...</div>)}
          </div>
@@ -1497,11 +1497,11 @@ const App: React.FC = () => {
               <span className="text-sm font-black text-emerald-500 chinese-font leading-tight">宣坨坨</span>
               <span className="text-[6px] opacity-40 uppercase tracking-wider leading-none">NETWORK V2.0</span>
             </div>
-            <button onClick={() => setShowRules(true)} className="w-7 h-7 flex items-center justify-center bg-slate-800 rounded-md text-[11px] font-black text-slate-400 active:scale-90 transition-all border border-white/5">规</button>
-            <button onClick={() => setShowHistory(true)} className="w-7 h-7 flex items-center justify-center bg-slate-800 rounded-md border border-white/5 font-black text-[11px] chinese-font transition-all active:scale-90 text-slate-300">录</button>
+            <button onClick={() => setShowRules(true)} className="w-7 h-7 flex items-center justify-center bg-slate-800 rounded-md text-[11px] font-black text-slate-100 active:scale-90 transition-all border border-white/5">规</button>
+            <button onClick={() => setShowHistory(true)} className="w-7 h-7 flex items-center justify-center bg-slate-800 rounded-md border border-white/5 font-black text-[11px] chinese-font transition-all active:scale-90 text-slate-100">录</button>
             <div className="text-[9px] font-mono bg-black/60 px-2 py-1 rounded-md border border-white/10 flex items-center gap-1"><span className="text-yellow-500 text-xs">🪙</span><span className="font-bold text-yellow-100">{gameState.starCoins[myPlayerId]}</span></div>
             <div className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded text-[8px] font-black">已收: {(gameState.collected[myPlayerId] as Card[]).length}</div>
-            <div className="px-2 py-0.5 bg-slate-800 border border-white/10 rounded text-[8px] font-black text-slate-200 flex items-center gap-1">
+            <div className="px-2 py-0.5 bg-slate-800 border border-white/10 rounded text-[8px] font-black text-slate-100 flex items-center gap-1">
               <span>🪪 江湖名</span>
               <span className="text-emerald-300">{displayNickname}</span>
             </div>
@@ -1570,7 +1570,7 @@ const App: React.FC = () => {
                 )}
               </div>
               <div className="flex flex-col items-center gap-0.5 text-center">
-                <span className="text-[10px] md:text-[11px] font-black text-slate-300 chinese-font">{getPlayerName(id)} ({gameState.hands[id].length})</span>
+                <span className="text-[10px] md:text-[11px] font-black text-slate-100 chinese-font">{getPlayerName(id)} ({gameState.hands[id].length})</span>
                 <div className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[8px] md:text-[9px] font-black">已收: {(gameState.collected[id] as Card[]).length}</div>
               </div>
             </div>
@@ -1595,7 +1595,7 @@ const App: React.FC = () => {
 
                   return (
                     <>
-                      <p className="text-sm text-slate-400 mb-6">{initiatorName} 发起博弈，当前 {deciderName} 表态...</p>
+                      <p className="text-sm text-slate-100 mb-6">{initiatorName} 发起博弈，当前 {deciderName} 表态...</p>
                       {currentDecider === myPlayerId ? (
                         <div className="flex gap-4 animate-in slide-in-from-bottom duration-500">
                           <button onClick={() => handleKouLeResponseAction('agree')} className="flex-1 py-4 bg-slate-800 rounded-xl font-black transition-all">扣了(同意)</button>
@@ -1675,7 +1675,7 @@ const App: React.FC = () => {
                 <div key={res.id} className={`relative flex items-center justify-between p-3 rounded-xl border-2 ${res.netGain < 0 ? 'border-red-500/50 bg-red-500/10' : (res.netGain > 0 ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-white/10 bg-white/5')}`}>
 
                   {/* 超大胜负标识 */}
-                  <div className={`absolute -left-3 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center font-black text-xl shadow-xl ${res.netGain > 0 ? 'bg-emerald-500 text-white' : (res.netGain < 0 ? 'bg-red-500 text-white' : 'bg-slate-700 text-slate-400')}`}>
+                  <div className={`absolute -left-3 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center font-black text-xl shadow-xl ${res.netGain > 0 ? 'bg-emerald-500 text-white' : (res.netGain < 0 ? 'bg-red-500 text-white' : 'bg-slate-700 text-slate-100')}`}>
                     {res.netGain > 0 ? '胜' : (res.netGain < 0 ? '负' : '平')}
                   </div>
 
@@ -1683,15 +1683,15 @@ const App: React.FC = () => {
                   <div className="flex-1 flex flex-col items-start ml-10 gap-0.5">
                     <span className="font-black text-lg chinese-font">{getPlayerName(res.id)}</span>
                     <div className="flex gap-1.5 items-center flex-wrap">
-                      <span className={`font-black px-1.5 py-0.5 rounded text-[10px] ${res.coins > 0 ? 'bg-emerald-500/30 text-emerald-300' : 'bg-slate-700 text-slate-400'}`}>{res.level}</span>
-                      <span className="text-[10px] text-slate-400">{res.cards}张</span>
+                      <span className={`font-black px-1.5 py-0.5 rounded text-[10px] ${res.coins > 0 ? 'bg-emerald-500/30 text-emerald-300' : 'bg-slate-700 text-slate-100'}`}>{res.level}</span>
+                      <span className="text-[10px] text-slate-100">{res.cards}张</span>
                       <span className="text-[10px] text-yellow-500 font-bold">x{res.finalMultiplier}</span>
                     </div>
                   </div>
 
                   {/* 右侧星光币变化 */}
                   <div className="flex flex-col items-end">
-                    <span className={`text-2xl font-black leading-none ${res.netGain > 0 ? 'text-emerald-400' : (res.netGain < 0 ? 'text-red-400' : 'text-slate-400')}`}>
+                    <span className={`text-2xl font-black leading-none ${res.netGain > 0 ? 'text-emerald-400' : (res.netGain < 0 ? 'text-red-400' : 'text-slate-100')}`}>
                       {res.netGain > 0 ? `+${res.netGain}` : res.netGain}
                     </span>
                     <span className="text-[9px] text-yellow-500 mt-0.5">🪙</span>
@@ -1716,7 +1716,7 @@ const App: React.FC = () => {
                   再来一局
                 </button>
               )}
-              <button onClick={quitToLobby} className="flex-1 py-2.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-black transition-all active:scale-95">返回大厅</button>
+              <button onClick={quitToLobby} className="flex-1 py-2.5 bg-slate-800 text-slate-100 rounded-lg text-xs font-black transition-all active:scale-95">返回大厅</button>
             </div>
           </div>
         </div>
