@@ -12,7 +12,8 @@ import {
   getKouLeChallengeTarget,
   checkNoXiang,
   suggestHintPlay,
-  suggestDiscard
+  suggestDiscard,
+  suggestDiscardAlternatives
 } from './gameLogic';
 import PlayingCard from './components/PlayingCard';
 
@@ -1180,25 +1181,67 @@ const App: React.FC = () => {
   const handleHint = useCallback(() => {
     const targetPlay = gameState.table.length > 0 ? gameState.table[0] : null;
     const currentMaxStr = gameState.table.reduce((max, p) => Math.max(max, p.strength), -1);
-    let hint = suggestHintPlay(
-      gameState.hands[myPlayerId],
-      targetPlay,
-      currentMaxStr,
-      (gameState.collected[myPlayerId] as Card[]).length,
-      gameState.table,
-      gameState.roundHistory,
-      (gameState.collected[myPlayerId] as Card[])
-    );
-    if ((!hint || hint.length === 0) && targetPlay) {
-      // 无法压过对手：按“扣牌”策略给出建议
-      const need = targetPlay.cards.length;
-      hint = suggestDiscard(gameState.hands[myPlayerId], need);
-    }
-    if (hint && hint.length > 0) {
-      setSelectedCards(hint);
+    const hand = gameState.hands[myPlayerId];
+    const collectedCnt = (gameState.collected[myPlayerId] as Card[]).length;
+
+    // 生成候选列表
+    let options: Card[][] = [];
+    if (targetPlay) {
+      // 能赢的候选：按强度升序
+      const wins = getValidPlays(hand, targetPlay, currentMaxStr)
+        .sort((a, b) => calculatePlayStrength(a).strength - calculatePlayStrength(b).strength);
+      if (wins.length > 0) {
+        options = wins;
+      } else {
+        const need = targetPlay.cards.length;
+        options = suggestDiscardAlternatives(hand, need, 4);
+      }
     } else {
-      addLog("💡 提示：当前无法压过场上最大牌，请尝试扣牌。");
+      // 首家：给出多种选择，首选为启发式建议
+      const primary = suggestHintPlay(hand, null, -1, collectedCnt, gameState.table, gameState.roundHistory, (gameState.collected[myPlayerId] as Card[]));
+      const validAll = getValidPlays(hand, null).filter(v => v.length > 0);
+      const singles = validAll.filter(v => v.length === 1).sort((a, b) => a[0].strength - b[0].strength);
+      const pairsAsc = validAll.filter(v => v.length === 2).sort((a, b) => calculatePlayStrength(a).strength - calculatePlayStrength(b).strength);
+      const triples = validAll.filter(v => v.length === 3);
+      const tripleQu = triples.find(t => t.every(c => c.name === '曲') && t.every(c => c.color === t[0].color));
+
+      const candidates: Card[][] = [];
+      const pushUnique = (arr?: Card[]) => {
+        if (!arr || arr.length === 0) return;
+        const key = arr.map(c => c.id).sort().join(',');
+        if (!candidates.some(x => x.map(c => c.id).sort().join(',') === key)) candidates.push(arr);
+      };
+      pushUnique(primary);
+      if (tripleQu) pushUnique(tripleQu);
+      if (pairsAsc.length > 0) { // 最小对子
+        pushUnique(pairsAsc[0]);
+      }
+      if (singles.length > 0) pushUnique(singles[0]);
+      options = candidates.length > 0 ? candidates : (primary && primary.length ? [primary] : []);
     }
+
+    if (options.length === 0) {
+      addLog("💡 暂无可用提示。");
+      return;
+    }
+
+    // 循环提示：根据 ‘手牌+目标’ 生成 key；每次点击在候选中轮换
+    const handKey = hand.map(c => c.id).sort().join('|');
+    const targetKey = targetPlay ? `${targetPlay.type}:${targetPlay.cards.length}:${currentMaxStr}` : 'lead';
+    const cycleKey = `${handKey}#${targetKey}`;
+
+    // 将 key 挂在闭包外的 ref，避免函数每次新建
+    if (!(window as any).__hintCycle) (window as any).__hintCycle = { key: '', idx: -1 };
+    const cycle = (window as any).__hintCycle as { key: string; idx: number };
+
+    if (cycle.key !== cycleKey) {
+      cycle.key = cycleKey;
+      cycle.idx = 0;
+    } else {
+      cycle.idx = (cycle.idx + 1) % options.length;
+    }
+
+    setSelectedCards(options[cycle.idx]);
   }, [addLog, gameState.hands, gameState.table, myPlayerId, gameState.collected, gameState.roundHistory]);
 
   const handleBetDecision = useCallback((multiplier: number, grab: boolean) => {

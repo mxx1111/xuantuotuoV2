@@ -258,6 +258,90 @@ export const suggestDiscard = (hand: Card[], count: number): Card[] => {
   return pick.slice(0, count);
 };
 
+// 枚举多个“扣牌”备选方案，用于前端循环提示
+export const suggestDiscardAlternatives = (hand: Card[], count: number, maxOpts: number = 4): Card[][] => {
+  const byStrengthAsc = (a: Card, b: Card) => a.strength - b.strength;
+  const handSorted = [...hand].sort(byStrengthAsc);
+
+  const allCombos = getValidPlays(hand, null);
+  const pairs = allCombos.filter(c => c.length === 2);
+  const triples = allCombos.filter(c => c.length === 3);
+
+  const strength = (cards: Card[]) => calculatePlayStrength(cards).strength;
+  const isTripleQuSameColor = (cards: Card[]) =>
+    cards.length === 3 && cards.every(c => c.name === '曲') && cards.every(c => c.color === cards[0].color);
+  const isSupremePair = (cards: Card[]) => {
+    if (cards.length !== 2) return false;
+    const [a, b] = cards;
+    const isWangPair = (a.name === '大王' && b.name === '小王') || (a.name === '小王' && b.name === '大王');
+    const isRedErPair = a.name === '尔' && b.name === '尔' && a.color === 'red' && b.color === 'red';
+    return isWangPair || isRedErPair || strength(cards) >= 125;
+  };
+
+  const involved = new Set<string>();
+  [...pairs, ...triples].forEach(g => g.forEach(c => involved.add(c.id)));
+  const singlesBase = handSorted.filter(c => !involved.has(c.id));
+
+  const tripleQuList = triples.filter(isTripleQuSameColor);
+  const protectedIdsBase = new Set<string>();
+  tripleQuList.forEach(g => g.forEach(c => protectedIdsBase.add(c.id)));
+  const pairsWithScore = pairs.map(p => ({ cards: p, score: strength(p), supreme: isSupremePair(p) }));
+  pairsWithScore.sort((a, b) => a.score - b.score);
+  const reserveSmallPair = pairsWithScore[0]?.cards || [];
+  reserveSmallPair.forEach(c => protectedIdsBase.add(c.id));
+  pairsWithScore.filter(p => p.supreme).forEach(p => p.cards.forEach(c => protectedIdsBase.add(c.id)));
+
+  const nonKeyPairs = pairsWithScore
+    .filter(p => !p.supreme && p.cards !== reserveSmallPair)
+    .map(p => p.cards);
+  const nonKeyTriples = triples.filter(t => !isTripleQuSameColor(t));
+
+  const opts: Card[][] = [];
+  const seenSet = new Set<string>();
+
+  const keyOf = (arr: Card[]) => arr.map(c => c.id).sort().join(',');
+
+  const buildWithOffset = (offset: number) => {
+    const protectedIds = new Set<string>(protectedIdsBase);
+    const singles = [...singlesBase];
+    // 旋转单牌顺序，给出不一样的丢牌方案
+    const rotatedSingles = singles.slice(offset).concat(singles.slice(0, offset));
+
+    const pick: Card[] = [];
+    for (const c of rotatedSingles) {
+      if (pick.length < count) pick.push(c);
+    }
+    const takeFromGroup = (groups: Card[][]) => {
+      for (const g of groups) {
+        const usable = g.filter(c => !protectedIds.has(c.id));
+        for (const c of usable.sort(byStrengthAsc)) {
+          if (pick.length < count) pick.push(c);
+        }
+        if (pick.length >= count) break;
+      }
+    };
+    if (pick.length < count) takeFromGroup(nonKeyPairs);
+    if (pick.length < count) takeFromGroup(nonKeyTriples);
+    if (pick.length < count) {
+      const fallback = handSorted.filter(c => !pick.some(pc => pc.id === c.id));
+      for (const c of fallback) { if (pick.length < count) pick.push(c); }
+    }
+    return pick.slice(0, count);
+  };
+
+  for (let i = 0; i < Math.max(1, Math.min(maxOpts, singlesBase.length)); i++) {
+    const pick = buildWithOffset(i);
+    const k = keyOf(pick);
+    if (!seenSet.has(k)) {
+      seenSet.add(k);
+      opts.push(pick);
+    }
+    if (opts.length >= maxOpts) break;
+  }
+  if (opts.length === 0) opts.push(suggestDiscard(hand, count));
+  return opts;
+};
+
 export const aiDecidePlay = (
   hand: Card[],
   targetPlay: Play | null,
