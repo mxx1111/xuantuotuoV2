@@ -367,6 +367,11 @@ const App: React.FC = () => {
     setIsHost(false);
     setMyPlayerId(PlayerId.PLAYER);
     setHostPeerId(roomId);
+    // 这里直接关闭加入弹窗并切换到“备战/等待”界面。
+    // 之前仅在收到房主返回的 ASSIGN_SEAT 后才关闭弹窗，
+    // 导致用户点击“加入”后表面上“没反应”（弹窗遮挡了等待界面），
+    // 实际房主端已经看到玩家加入。提早关闭可即时反馈。
+    setShowJoinModal(false);
     setGameState(prev => ({ ...prev, phase: GamePhase.WAITING }));
     addLog(`🔗 正在加入房间：${roomId}`);
 
