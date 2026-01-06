@@ -195,6 +195,8 @@ const App: React.FC = () => {
   const hostPeerIdRef = useRef<string>(hostPeerId);
   const autoJoinRoomRef = useRef<string>('');
   const handleNetworkMessageRef = useRef<(msg: NetworkMessage, remotePeerId?: string) => void>(() => {});
+  // 防止默认随机昵称的副作用重复触发
+  const autoNicknameInitRef = useRef<boolean>(false);
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
   const [hoverCardId, setHoverCardId] = useState<string | null>(null);
   const [isTouchDevice, setIsTouchDevice] = useState<boolean>(false);
@@ -255,13 +257,15 @@ const App: React.FC = () => {
     };
   }, []);
   
-  // 首次进入时，若未填写江湖名，自动生成一个随机外号，便于快速开始
+  // 首次进入时，若未填写江湖名，自动生成一个随机外号（只执行一次）
   useEffect(() => {
-    if (!myNickname) {
-      const n = getRandomNickname();
-      setMyNickname(n);
+    if (autoNicknameInitRef.current) return;
+    if (!myNickname || myNickname.trim() === '') {
+      setMyNickname(getRandomNickname());
     }
-  }, [getRandomNickname]);
+    autoNicknameInitRef.current = true;
+    // 空依赖：仅在挂载时执行一次，避免因昵称变化重复触发
+  }, []);
 
   const getPlayerName = useCallback((pid: PlayerId) => {
     if (pid === myPlayerId) {
@@ -1683,11 +1687,11 @@ const App: React.FC = () => {
           <div className="absolute -bottom-8 left-0 right-0 flex flex-col items-center z-40 px-2">
             {/* 操作按钮 */}
             <div className="flex justify-center items-center gap-1 w-full max-w-3xl mb-2">
-              <button onClick={() => handleAction(true)} disabled={!canDiscard} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${canDiscard ? 'bg-indigo-600 border-indigo-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>扣牌</button>
-              <button onClick={handleHint} disabled={gameState.phase !== GamePhase.PLAYING || gameState.turn !== myPlayerId} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${gameState.turn === myPlayerId && gameState.phase === GamePhase.PLAYING ? 'bg-emerald-600 border-emerald-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>提示</button>
               {canInitiateKouLe && (
                 <button onClick={handleInitiateKouLeAction} className="flex-1 max-w-[55px] h-6 md:h-9 flex items-center justify-center bg-red-600 border border-red-500 rounded-md font-black text-[9px] md:text-sm transition-all active:scale-95 text-white shadow-md animate-pulse">扣了</button>
               )}
+              <button onClick={() => handleAction(true)} disabled={!canDiscard} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${canDiscard ? 'bg-indigo-600 border-indigo-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>扣牌</button>
+              <button onClick={handleHint} disabled={gameState.phase !== GamePhase.PLAYING || gameState.turn !== myPlayerId} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${gameState.turn === myPlayerId && gameState.phase === GamePhase.PLAYING ? 'bg-emerald-600 border-emerald-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>提示</button>
               <button onClick={() => handleAction(false)} disabled={!canFollow} className={`flex-1 max-w-[65px] h-6 md:h-9 flex items-center justify-center rounded-md font-black text-[9px] md:text-sm transition-all border ${canFollow ? 'bg-orange-600 border-orange-500 active:scale-95 shadow-md text-white' : 'bg-slate-800/50 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>{gameState.table.length === 0 ? '出牌' : '跟牌'}</button>
             </div>
 
