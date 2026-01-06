@@ -11,7 +11,8 @@ import {
   aiDecidePlay, aiEvaluateKouLe, aiDecideBet,
   getKouLeChallengeTarget,
   checkNoXiang,
-  suggestHintPlay
+  suggestHintPlay,
+  suggestDiscard
 } from './gameLogic';
 import PlayingCard from './components/PlayingCard';
 
@@ -1179,7 +1180,7 @@ const App: React.FC = () => {
   const handleHint = useCallback(() => {
     const targetPlay = gameState.table.length > 0 ? gameState.table[0] : null;
     const currentMaxStr = gameState.table.reduce((max, p) => Math.max(max, p.strength), -1);
-    const hint = suggestHintPlay(
+    let hint = suggestHintPlay(
       gameState.hands[myPlayerId],
       targetPlay,
       currentMaxStr,
@@ -1188,6 +1189,11 @@ const App: React.FC = () => {
       gameState.roundHistory,
       (gameState.collected[myPlayerId] as Card[])
     );
+    if ((!hint || hint.length === 0) && targetPlay) {
+      // 无法压过对手：按“扣牌”策略给出建议
+      const need = targetPlay.cards.length;
+      hint = suggestDiscard(gameState.hands[myPlayerId], need);
+    }
     if (hint && hint.length > 0) {
       setSelectedCards(hint);
     } else {

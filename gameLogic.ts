@@ -181,6 +181,83 @@ export const suggestHintPlay = (
   return triples[triples.length - 1] || valid[0];
 };
 
+// 选择用于“扣牌”的卡组：尽量丢弃与胜利不相关或最小的单牌，避免破坏关键组合；必要时才打散非关键对子/三张
+export const suggestDiscard = (hand: Card[], count: number): Card[] => {
+  const byStrengthAsc = (a: Card, b: Card) => a.strength - b.strength;
+  const handSorted = [...hand].sort(byStrengthAsc);
+
+  // 找出所有可组成对子/三张的组合
+  const allCombos = getValidPlays(hand, null);
+  const pairs = allCombos.filter(c => c.length === 2);
+  const triples = allCombos.filter(c => c.length === 3);
+
+  const strength = (cards: Card[]) => calculatePlayStrength(cards).strength;
+  const isTripleQuSameColor = (cards: Card[]) =>
+    cards.length === 3 && cards.every(c => c.name === '曲') && cards.every(c => c.color === cards[0].color);
+  const isSupremePair = (cards: Card[]) => {
+    if (cards.length !== 2) return false;
+    const [a, b] = cards;
+    const isWangPair = (a.name === '大王' && b.name === '小王') || (a.name === '小王' && b.name === '大王');
+    const isRedErPair = a.name === '尔' && b.name === '尔' && a.color === 'red' && b.color === 'red';
+    return isWangPair || isRedErPair || strength(cards) >= 125;
+  };
+
+  // 标记哪些牌参与任何对子/三张（潜在关键）
+  const involved = new Set<string>();
+  [...pairs, ...triples].forEach(g => g.forEach(c => involved.add(c.id)));
+  const singles = handSorted.filter(c => !involved.has(c.id));
+
+  const pick: Card[] = [];
+
+  // 1) 优先丢弃最小的单牌
+  for (const c of singles) {
+    if (pick.length < count) pick.push(c);
+  }
+  if (pick.length >= count) return pick.slice(0, count);
+
+  // 2) 避免破坏“同色三曲三”与“最大对子”；保留一对最小对子作为残局资源
+  const tripleQuList = triples.filter(isTripleQuSameColor);
+  const protectedIds = new Set<string>();
+  tripleQuList.forEach(g => g.forEach(c => protectedIds.add(c.id)));
+
+  // 找到所有对子，计算强度，确定要“保留”的最小对子 + 所有“最大对子”
+  const pairsWithScore = pairs.map(p => ({ cards: p, score: strength(p), supreme: isSupremePair(p) }));
+  pairsWithScore.sort((a, b) => a.score - b.score); // 从小到大
+  const reserveSmallPair = pairsWithScore[0]?.cards || [];
+  reserveSmallPair.forEach(c => protectedIds.add(c.id));
+  pairsWithScore.filter(p => p.supreme).forEach(p => p.cards.forEach(c => protectedIds.add(c.id)));
+
+  // 3) 若仍需丢牌：尽量从“非关键对子/三张”里拿，优先拿最小的，且尽量只拿所需数量
+  const takeFromGroup = (groups: Card[][]) => {
+    for (const g of groups) {
+      const usable = g.filter(c => !protectedIds.has(c.id));
+      for (const c of usable.sort(byStrengthAsc)) {
+        if (pick.length < count) pick.push(c);
+      }
+      if (pick.length >= count) break;
+    }
+  };
+
+  // 非关键的对子（从小到大）
+  const nonKeyPairs = pairsWithScore
+    .filter(p => !p.supreme && p.cards !== reserveSmallPair)
+    .map(p => p.cards);
+  takeFromGroup(nonKeyPairs);
+  if (pick.length >= count) return pick.slice(0, count);
+
+  // 非关键三张（非同色三曲三）
+  const nonKeyTriples = triples.filter(t => !isTripleQuSameColor(t));
+  takeFromGroup(nonKeyTriples);
+  if (pick.length >= count) return pick.slice(0, count);
+
+  // 4) 实在不够：从受保护组中拿最小的（极少发生）
+  const fallback = handSorted.filter(c => !pick.some(pc => pc.id === c.id));
+  for (const c of fallback) {
+    if (pick.length < count) pick.push(c);
+  }
+  return pick.slice(0, count);
+};
+
 export const aiDecidePlay = (
   hand: Card[],
   targetPlay: Play | null,
@@ -194,7 +271,7 @@ export const aiDecidePlay = (
   if (targetPlay) {
     if (validOptions.length === 0) {
       const count = targetPlay.cards.length;
-      return [...hand].sort((a, b) => a.strength - b.strength).slice(0, count);
+      return suggestDiscard(hand, count);
     }
     return validOptions.slice().sort((a,b) => calculatePlayStrength(a).strength - calculatePlayStrength(b).strength)[0];
   }
