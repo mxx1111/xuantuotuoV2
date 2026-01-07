@@ -1273,25 +1273,29 @@ const App: React.FC = () => {
 
   const renderLobby = () => (
     <div className="absolute inset-0 z-[500] bg-slate-950 flex flex-col items-center justify-start landscape:justify-center p-6 landscape:p-3 landscape:py-2 pt-14 md:pt-24 landscape:pt-6 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] overflow-y-auto custom-scrollbar">
-      <div className="text-center mt-6 mb-10 landscape:mt-2 landscape:mb-3 animate-in fade-in slide-in-from-top-10 duration-1000">
+      {/* 左上角快捷操作：加入房间 / 我的房号 */}
+      <div
+        className="absolute flex gap-2 z-[600]"
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)', left: 'calc(env(safe-area-inset-left, 0px) + 80px)' }}
+      >
+        <button
+          onClick={() => setShowJoinModal(true)}
+          disabled={!isNicknameReady}
+          className="px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-500/80 to-emerald-500/80 text-slate-900 text-xs font-black chinese-font hover:from-cyan-400/90 hover:to-emerald-400/90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+        >
+          加入房间
+        </button>
+        <div className="px-2 py-1 bg-slate-800/70 border border-white/10 rounded-full text-[10px] font-black text-slate-100 flex items-center gap-2">
+          <span className="opacity-70">房号</span>
+          <span className="font-mono text-emerald-400 text-sm leading-none">{myId || '——'}</span>
+        </div>
+      </div>
+      <div className="text-center mt-2 mb-8 landscape:mt-1 landscape:mb-3 animate-in fade-in slide-in-from-top-10 duration-1000">
         <h1 className="text-7xl landscape:text-4xl font-black chinese-font text-emerald-500 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] mb-2 landscape:mb-1 leading-tight py-4 landscape:py-1">宣 坨 坨</h1>
         <p className="text-slate-300 uppercase tracking-[0.3em] text-base landscape:text-sm font-bold">Traditional Shanxi Strategy Game</p>
       </div>
 
       <div className={`w-full ${isCompactLandscape ? 'max-w-5xl' : 'max-w-6xl'} flex flex-col items-center md:flex-row md:items-start md:justify-center ${isCompactLandscape ? 'gap-4 md:gap-6' : 'gap-6 md:gap-10'}`}>
-        <div className={`order-2 md:order-1 w-full max-w-xs md:max-w-none ${isCompactLandscape ? 'md:basis-[12rem]' : 'md:basis-[14rem]'} md:flex-none flex justify-center md:justify-end`} style={{ transform: isCompactLandscape ? 'scale(0.95)' : undefined, transformOrigin: 'center' }}>
-          <div className="w-full md:w-[14rem] bg-slate-950/60 border border-white/10 rounded-[1.75rem] p-5 landscape:p-4 flex flex-col gap-4 shadow-[0_20px_45px_-30px_rgba(14,165,233,0.35)]">
-            {/* 简化：仅保留一个加入按钮，点击后弹出输入房号 */}
-            <button
-              onClick={() => setShowJoinModal(true)}
-              disabled={!isNicknameReady}
-              className="w-full bg-gradient-to-r from-cyan-500/80 to-emerald-500/80 text-slate-900 font-black chinese-font rounded-2xl py-3 text-base transition-all hover:from-cyan-400/90 hover:to-emerald-400/90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
-            >
-              加 入 房 间
-            </button>
-          </div>
-        </div>
-
         <div className={`order-1 md:order-2 flex justify-center w-full ${isCompactLandscape ? "max-w-sm" : "max-w-md"}`}>
           <div className="flex flex-col gap-5 landscape:gap-2 w-full animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
             <div className="flex flex-col gap-2 bg-slate-900/40 border border-white/5 rounded-3xl landscape:rounded-2xl p-4 shadow-[0_25px_60px_-40px_rgba(15,118,110,0.7)]">
@@ -1324,13 +1328,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className={`order-3 w-full max-w-xs md:max-w-none ${isCompactLandscape ? "md:basis-[12rem]" : "md:basis-[14rem]"} md:flex-none flex justify-center md:justify-start`} style={{ transform: isCompactLandscape ? "scale(0.95)" : undefined, transformOrigin: "center" }}>
-          <div className="w-full md:w-[14rem] bg-slate-950/60 border border-white/10 rounded-[1.75rem] p-5 landscape:p-4 flex flex-col gap-4 shadow-[0_20px_45px_-30px_rgba(16,185,129,0.5)]">
-            {/* 简化：仅保留 4 位房号与“分享”按钮 */}
-            <div className="text-emerald-400 font-mono font-black text-4xl landscape:text-3xl text-center py-1">{myId || '——'}</div>
-            <button onClick={handleShareRoom} disabled={!myId} className="w-full bg-slate-900/70 border border-emerald-500/40 rounded-2xl py-2.5 text-sm font-black text-emerald-300 transition-all hover:bg-slate-900/90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-slate-900/70">🔗 分享</button>
-          </div>
-        </div>
+        {/* 右侧卡片（我的房号/分享）已移除，顶部已有快捷入口 */}
       </div>
     </div>
   );
@@ -1570,7 +1568,28 @@ const App: React.FC = () => {
             <div className={`flex items-center justify-center ${isCompactLandscape ? 'gap-6 md:gap-16 mb-10' : 'gap-8 md:gap-24 mb-16'}` }>
               {orientation.waitingOrder.map((id, idx) => (
                 <div key={id} className={`flex flex-col items-center ${isCompactLandscape ? 'gap-3' : 'gap-4'} ${idx === 1 ? (isCompactLandscape ? 'mt-4' : 'mt-8') : ''}`}>
-                   <div className={`${isCompactLandscape ? 'w-16 h-16 md:w-24 md:h-24' : 'w-20 h-20 md:w-28 md:h-28'} rounded-full border-2 flex items-center justify-center text-3xl md:text-4xl shadow-2xl transition-all ${id === myPlayerId ? 'border-emerald-500 bg-slate-800' : (slots[id].type === 'empty' ? 'border-dashed border-slate-700 bg-slate-900/50 grayscale' : 'border-emerald-500 bg-slate-800')}`}>
+                   {/* 点击头像即可添加/移除 AI。仅房主且目标席位非真人时生效。 */}
+                   <div
+                     onClick={() => {
+                       // 只有房主且目标席位不是玩家本人、也不是真人玩家时，才允许切换 AI/空位
+                       if (!isHost || id === PlayerId.PLAYER || slots[id].type === 'human') return;
+                       setSlots(prev => {
+                         const n = { ...prev };
+                         if (n[id].type === 'empty') {
+                           const usedNames = Object.values(prev).map((s: SlotInfo) => s.name);
+                           const name = pickAiName(usedNames);
+                           n[id] = { type: 'ai', name };
+                           // 同步到全局 AI 名称，便于结算/日志显示
+                           setGameState(gs => ({ ...gs, aiNames: { ...gs.aiNames, [id]: name } }));
+                         } else if (n[id].type === 'ai') {
+                           n[id] = { type: 'empty', name: '等待加入...' };
+                           setGameState(gs => ({ ...gs, aiNames: { ...gs.aiNames, [id]: 'AI' } }));
+                         }
+                         return n;
+                       });
+                     }}
+                     className={`${isCompactLandscape ? 'w-16 h-16 md:w-24 md:h-24' : 'w-20 h-20 md:w-28 md:h-28'} rounded-full border-2 flex items-center justify-center text-3xl md:text-4xl shadow-2xl transition-all ${id === myPlayerId ? 'border-emerald-500 bg-slate-800' : (slots[id].type === 'empty' ? 'border-dashed border-slate-700 bg-slate-900/50 grayscale' : 'border-emerald-500 bg-slate-800')} ${isHost && id !== PlayerId.PLAYER && slots[id].type !== 'human' ? 'cursor-pointer hover:brightness-110 active:scale-95' : ''}`}
+                   >
                       {id === myPlayerId ? '👤' : (slots[id].type === 'empty' ? '?' : (slots[id].type === 'ai' ? '🤖' : '侠'))}
                    </div>
                    <div className="text-center">
@@ -1599,10 +1618,22 @@ const App: React.FC = () => {
             </div>
             {isHost ? (
                <div className="fixed left-0 right-0 px-2" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)' }}>
-                 <div className="mx-auto w-full max-w-3xl flex flex-col gap-2">
-                   <button onClick={() => initGame()} disabled={slots[PlayerId.AI_LEFT].type === 'empty' || slots[PlayerId.AI_RIGHT].type === 'empty'} className={`${isCompactLandscape ? 'w-full py-2.5 text-base rounded-2xl' : 'w-full py-3 text-lg rounded-2xl'} font-black transition-all chinese-font shadow-2xl ${slots[PlayerId.AI_LEFT].type !== 'empty' && slots[PlayerId.AI_RIGHT].type !== 'empty' ? 'bg-emerald-600 active:scale-95' : 'bg-slate-800 text-slate-600 opacity-50 cursor-not-allowed'}`}>开 始 游 戏</button>
-                   <button onClick={quitToLobby} className="py-2 text-slate-100 text-xs font-black transition-all uppercase tracking-widest">解散房间并返回</button>
-                 </div>
+                {/* 底部操作区：解散房间 + 开始游戏，并排一行 */}
+                <div className="mx-auto w-full max-w-3xl flex items-center gap-2">
+                  <button
+                    onClick={quitToLobby}
+                    className={`${isCompactLandscape ? 'flex-1 py-2.5 text-base rounded-2xl' : 'flex-1 py-3 text-lg rounded-2xl'} bg-red-600 text-white font-black transition-all chinese-font active:scale-95 border border-red-400/40 hover:bg-red-700`}
+                  >
+                    解散房间
+                  </button>
+                  <button
+                    onClick={() => initGame()}
+                    disabled={slots[PlayerId.AI_LEFT].type === 'empty' || slots[PlayerId.AI_RIGHT].type === 'empty'}
+                    className={`${isCompactLandscape ? 'flex-1 py-2.5 text-base rounded-2xl' : 'flex-1 py-3 text-lg rounded-2xl'} font-black transition-all chinese-font shadow-2xl ${slots[PlayerId.AI_LEFT].type !== 'empty' && slots[PlayerId.AI_RIGHT].type !== 'empty' ? 'bg-emerald-600 active:scale-95' : 'bg-slate-800 text-slate-600 opacity-50 cursor-not-allowed'}`}
+                  >
+                    开 始 游 戏
+                  </button>
+                </div>
                </div>
             ) : (<div className="text-emerald-500 animate-pulse font-black chinese-font text-xl">房主正在配置席位...</div>)}
          </div>
