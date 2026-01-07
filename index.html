@@ -1,16 +1,34 @@
 
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>宣坨坨 - 传统博弈游戏</title>
+    <script>
+      // 首屏主题无闪烁处理：优先使用本地存储；否则跟随系统
+      (function() {
+        try {
+          var saved = localStorage.getItem('xuantuotuo-theme');
+          var preferDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (saved ? saved === 'dark' : preferDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
+        /* 通过 CSS 变量承载基础前景/背景色，便于主题切换 */
+        /* 亮色主题采用台球桌面风格绿色 */
+        :root { --bg: #065f46; /* emerald-700 */ --text: #ecfdf5; /* emerald-50 */ }
+        html.dark { --bg: #0f172a; --text: #f8fafc; }
         body {
-            background-color: #0f172a;
-            color: #f8fafc;
+            background-color: var(--bg);
+            color: var(--text);
             font-family: 'Inter', 'Noto Serif SC', serif;
             margin: 0;
             overflow: hidden;
