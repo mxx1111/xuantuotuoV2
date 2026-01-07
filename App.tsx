@@ -1296,8 +1296,8 @@ const App: React.FC = () => {
           <div className="flex flex-col gap-5 landscape:gap-2 w-full animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
             <div className="flex flex-col gap-2 bg-slate-900/40 border border-white/5 rounded-3xl landscape:rounded-2xl p-4 shadow-[0_25px_60px_-40px_rgba(15,118,110,0.7)]">
               <label className="text-sm landscape:text-[11px] text-slate-200 font-black tracking-[0.45em] uppercase flex items-center gap-1">江湖名<span className="text-red-500 text-base" aria-hidden="true">*</span></label>
-              <div className="flex gap-2 items-center">
-                <input value={myNickname} onChange={e => setMyNickname(e.target.value.slice(0, 12))} placeholder="请输入让人记得住的外号..." required aria-required="true" aria-invalid={!isNicknameReady} className="flex-1 bg-slate-950 border border-white/10 rounded-2xl landscape:rounded-xl px-4 py-3 chinese-font font-bold text-emerald-400 placeholder:text-slate-700 focus:border-emerald-500/50 focus:outline-none transition-all" />
+              <div className="flex items-center gap-1.5 w-full max-w-sm">
+                <input value={myNickname} onChange={e => setMyNickname(e.target.value.slice(0, 12))} placeholder="请输入让人记得住的外号..." required aria-required="true" aria-invalid={!isNicknameReady} className="min-w-0 flex-1 bg-slate-950 border border-white/10 rounded-2xl landscape:rounded-xl px-4 py-3 chinese-font font-bold text-emerald-400 placeholder:text-slate-700 focus:border-emerald-500/50 focus:outline-none transition-all" />
                 <button onClick={handleRandomNickname} type="button" className="px-3 py-2 rounded-xl bg-slate-800 border border-white/10 text-[12px] font-black text-emerald-400 hover:bg-slate-700 active:scale-95 transition-all whitespace-nowrap">🎲 随机</button>
               </div>
               <p className="text-xs landscape:text-[11px] text-slate-400">所有玩家都会在房内看到该昵称。</p>
